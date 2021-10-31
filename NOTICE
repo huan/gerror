@@ -1,8 +1,6 @@
-FileBox is a file encapsulate module for manage file via network transfer API
-Copyright 2018 Huan (李卓桓) <zixia@zixia.net>
+Copyright 2021 Huan (李卓桓) <zixia@zixia.net>
 
-This product includes software developed at
-The Wechaty Organization (https://github.com/wechaty).
+This product includes software developed at (https://github.com/huan)
 
 This software contains code derived from the Stackoverflow,
 including various modifications by GitHub.

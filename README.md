@@ -32,7 +32,6 @@ const gerror = GError.from(new Error('test'))
 
 TBW
 
-
 ## History
 
 ### master v0.1 (Oct 30, 2021)

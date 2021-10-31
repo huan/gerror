@@ -7,7 +7,7 @@
 
 Mixer of gRPC Error &amp; ECMAScript Error
 
-![GError](https://huan.github.io/gerror/images/gerror-logo.jpg)
+![GError](docs/images/gerror-logo.png)
 
 ## Motivation
 

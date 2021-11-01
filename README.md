@@ -50,7 +50,7 @@ const asyncFunc = async () => Promise.reject('rejection')
 const syncFunc = wrapAsync(asyncFunc)
 // ReturnType<typeof syncFunc> === 'void'
 
-asyncFunc() // <- nothing happens
+asyncFunc() // <- nothing happens (no unhandled rejections)
 // console.error('Rejection')
 ```
 

@@ -14,9 +14,9 @@ interface WrapAsync {
 
 }
 
-type OnErrorCallback = (error: any) => void
+type WrapAsyncErrorCallback = (error: any) => void
 
-const wrapAsyncError: (onError: OnErrorCallback) => WrapAsync = onError => <T extends (...args: any[]) => any | Promise<any>> (
+const wrapAsyncError: (onError: WrapAsyncErrorCallback) => WrapAsync = onError => <T extends (...args: any[]) => any | Promise<any>> (
   asyncStaff: T | Promise<any>,
 ) => {
   /**
@@ -53,6 +53,7 @@ const wrapAsyncError: (onError: OnErrorCallback) => WrapAsync = onError => <T ex
 
 export type {
   WrapAsync,
+  WrapAsyncErrorCallback,
 }
 export {
   wrapAsyncError,

@@ -9,10 +9,12 @@ import {
 import {
   wrapAsyncError,
   WrapAsync,
-}                   from './wrap-async-error/wrap-async-error.js'
+  WrapAsyncErrorCallback,
+}                           from './wrap-async-error/wrap-async-error.js'
 
 export type {
   WrapAsync,
+  WrapAsyncErrorCallback,
 }
 export {
   isEcmaError,

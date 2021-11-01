@@ -22,19 +22,41 @@ In order to make it easy, we build GError module
 
 ## Examples
 
+TBW
+
+## API Reference
+
+### `GError`
+
+TBW
+
 ```ts
 import { GError } from 'gerror'
 
 const gerror = GError.from(new Error('test'))
 ```
 
-## API Reference
+### `wrapAsyncError`
 
 TBW
 
+```ts
+import { wrapAsyncError } from 'gerror'
+
+const onError = (e: any) => console.error(e)
+const wrapAsync = wrapAsyncError(onError)
+
+const asyncFunc = async () => Promise.reject('rejection')
+const syncFunc = wrapAsync(asyncFunc)
+// ReturnType<typeof syncFunc> === 'void'
+
+asyncFunc() // <- nothing happens
+// console.error('Rejection')
+```
+
 ## History
 
-### master v0.1 (Oct 30, 2021)
+### master v1.0 (Oct 30, 2021)
 
 1. Initial code from `wechaty-puppet` module
 

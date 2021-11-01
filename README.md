@@ -11,7 +11,7 @@ Mixer of gRPC Error &amp; ECMAScript Error
 
 ## Motivation
 
-We working with gRPC with Node.js(ECMAScript) and we need to mix gRPC Error &amp; ECMAScript Error.
+We are writing async programs with gRPC with Node.js(ECMAScript) so we need to mix gRPC Error &amp; ECMAScript Error.
 
 In order to make it easy, we build GError module
 

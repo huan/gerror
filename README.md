@@ -26,9 +26,9 @@ TBW
 
 ## API Reference
 
-### `GError`
+### `class GError`
 
-TBW
+`GError` can be used to replace the standard `Error` as a drop in replacement.
 
 ```ts
 import { GError } from 'gerror'
@@ -36,9 +36,14 @@ import { GError } from 'gerror'
 const gerror = GError.from(new Error('test'))
 ```
 
-### `wrapAsyncError`
+### `wrapAsyncError()`
 
-TBW
+It has been designed to convert a Async to Sync, for example:
+
+1. `async (...args: any[]) => Promise<any>` will be converted to `(...args: any[]) => void`
+1. `Promise<any>` will be converted to `void`
+
+The error will be send via the `onError` callback.
 
 ```ts
 import { wrapAsyncError } from 'gerror'
@@ -53,6 +58,10 @@ const syncFunc = wrapAsync(asyncFunc)
 asyncFunc() // <- nothing happens (no unhandled rejections)
 // console.error('Rejection')
 ```
+
+## Resources
+
+1. [Google Cloud APIs - Errors](https://cloud.google.com/apis/design/errors)
 
 ## History
 

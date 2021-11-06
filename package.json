@@ -1,6 +1,6 @@
 {
   "name": "gerror",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Mixer for gRPC Error & ECMAScript Error",
   "type": "module",
   "exports": {

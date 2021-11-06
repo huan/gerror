@@ -12,15 +12,18 @@ import {
   WrapAsyncErrorCallback,
 }                           from './wrap-async-error/wrap-async-error.js'
 
+import { timeoutPromise } from './timeout-promise.js'
+
 export type {
   WrapAsync,
   WrapAsyncErrorCallback,
 }
 export {
-  isEcmaError,
-  isGrpcStatus,
-  isGError,
-  wrapAsyncError,
   GError,
+  isEcmaError,
+  isGError,
+  isGrpcStatus,
+  timeoutPromise,
   VERSION,
+  wrapAsyncError,
 }

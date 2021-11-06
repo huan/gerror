@@ -68,6 +68,7 @@ asyncFunc() // <- nothing happens (no unhandled rejections)
 ### master v1.0 (Oct 30, 2021)
 
 1. Initial code from `wechaty-puppet` module
+1. Add `timeoutPromise()` function
 
 ## Author
 

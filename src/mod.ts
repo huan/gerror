@@ -6,6 +6,13 @@ import {
   isGError,
   GError,
 }                   from './gerror/gerror.js'
+import type {
+  EcmaError,
+}                   from './gerror/ecma.js'
+import type {
+  GrpcStatus,
+}                   from './gerror/grpc.js'
+
 import {
   wrapAsyncError,
   WrapAsync,
@@ -17,6 +24,8 @@ import { timeoutPromise } from './timeout-promise.js'
 export type {
   WrapAsync,
   WrapAsyncErrorCallback,
+  EcmaError,
+  GrpcStatus,
 }
 export {
   GError,

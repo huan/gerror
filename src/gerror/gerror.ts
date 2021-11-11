@@ -64,7 +64,7 @@ class GError extends Error implements GrpcStatus, EcmaError {
     return e
   }
 
-  protected constructor (
+  constructor (
     payload: GrpcStatus | EcmaError,
   ) {
     super()

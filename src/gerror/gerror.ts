@@ -23,7 +23,23 @@ class GError extends Error implements GrpcStatus, EcmaError {
   code     : number
   details? : string
 
-  public static from (payload: any): GError {
+  static stringify (payload: any): string {
+    return JSON.stringify(
+      this.from(payload),
+    )
+  }
+
+  /**
+   * GError.from() supports:
+   *  - string
+   *  - Error instance
+   *  - GError instance
+   *  - GrpcStatus object
+   *  - EcmaError object
+   *  - GError object
+   *  - PuppetEventErrorPayload object/string
+   */
+  static from (payload: any): GError {
     /**
      * Huan(202110): in case of the payload is a Puppet Error Payload
      *  CAUTION: we must make sure the payload with a { data } property
@@ -33,6 +49,9 @@ class GError extends Error implements GrpcStatus, EcmaError {
       payload = payload.data
     }
 
+    /**
+     * Error, GError, GrpcStatus, EcmaError, GError, and string
+     */
     if (payload instanceof Object || typeof payload === 'string') {
       try {
         return this.fromJSON(payload)
@@ -41,6 +60,9 @@ class GError extends Error implements GrpcStatus, EcmaError {
       }
     }
 
+    /**
+     * others, or `string` that can not be parsed to JSON
+     */
     return this.fromJSON({
       message: String(payload),
       name: 'GError: from(`' + typeof payload + '`)',

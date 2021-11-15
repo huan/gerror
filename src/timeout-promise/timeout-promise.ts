@@ -1,3 +1,5 @@
+import { TimeoutPromiseGError } from './timeout-promise-gerror.js'
+
 /**
  * @see https://github.com/huan/gerror
  *
@@ -21,8 +23,7 @@ const timeoutPromise = <T> (
         if (exceptionFactory) {
           e = exceptionFactory()
         } else {
-          e = new Error('Timeout after ' + milliseconds + ' ms')
-          e.name = 'Timeout'
+          e = TimeoutPromiseGError.from('Timeout after ' + milliseconds + ' ms')
         }
         reject(e)
       },

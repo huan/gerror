@@ -1,8 +1,10 @@
 import { GError } from '../gerror/gerror.js'
+import { Code } from '../gerror/grpc.js'
 
 class TimeoutPromiseGError extends GError {
 
-  override name = 'Timeout'
+  override name = 'DEADLINE_EXCEEDED'
+  override code = Code.DEADLINE_EXCEEDED
 
 }
 

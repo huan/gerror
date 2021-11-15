@@ -41,3 +41,9 @@ test('GError JSON payload v.s. EventErrorPayload', async t => {
 
   t.notOk(isPuppetEventErrorPayload(obj), 'should not pass the EventErrorPayload check')
 })
+
+test('GError.from(string) should have stack info', async t => {
+  const e = GError.from('test')
+  t.equal(e.name, 'GError', 'should be Error')
+  t.ok(e.stack, 'should have stack info')
+})

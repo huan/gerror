@@ -58,7 +58,7 @@ enum Code {
 
 interface GrpcStatus {
   code     : Code
-  message  : string
+  message? : string
   /**
    * In gRPC Protobuf, details is a Array
    *  but here, we only keep the first element (if ther's any)
@@ -79,7 +79,7 @@ interface GrpcStatus {
 
 const isGrpcStatus = (payload: any): payload is GrpcStatus => payload instanceof Object
   && typeof payload.code    === 'number'
-  && typeof payload.message === 'string'
+  // && typeof payload.message === 'string' // optional, message might be `undefined` in `@grpc/grpc-js`
   && ['undefined', 'string'].includes(typeof payload.details)
 
 export type { GrpcStatus }

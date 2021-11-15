@@ -2,14 +2,16 @@
  * [RFC] We need a better error system #159
  *  https://github.com/wechaty/puppet/issues/159
  */
-import type { EcmaError }   from './ecma.js'
-import { isEcmaError }      from './ecma.js'
-import type { GrpcStatus }  from './grpc.js'
+import type { EcmaError }       from './ecma.js'
+import { isEcmaError }          from './ecma.js'
+import type { GrpcStatus }      from './grpc.js'
 import {
   isGrpcStatus,
   Code,
-}                           from './grpc.js'
-import { isPuppetEventErrorPayload } from './puppet.js'
+}                               from './grpc.js'
+import {
+  isPuppetEventErrorPayload,
+}                               from './puppet.js'
 
 const isGError = (payload: any): payload is GError => payload instanceof Object
   && isEcmaError(payload)
@@ -102,7 +104,7 @@ class GError extends Error implements GrpcStatus, EcmaError {
     /**
      * Common properties
      */
-    this.message = payload.message
+    this.message = payload.message || ''
 
     if (isGError(payload)) {
       this.code    = payload.code

@@ -64,19 +64,17 @@ class GError extends Error implements GrpcStatus, EcmaError {
      * `string` that can not be parsed to JSON
      */
     if (typeof payload === 'string') {
-      return this.fromJSON({
-        message: payload,
-        name: 'GError',
-      })
+      const e = new Error(payload)
+      e.name = 'GError'
+      return this.from(e)
     }
 
     /**
      * others
      */
-    return this.fromJSON({
-      message: String(payload),
-      name: 'GError: from(`' + typeof payload + '`)',
-    })
+    const e = new Error(`${payload}`)
+    e.name = 'GError: from(`' + typeof payload + '`)'
+    return this.from(e)
   }
 
   /**

@@ -15,8 +15,9 @@ interface WrapAsync {
 }
 
 type WrapAsyncErrorCallback = (error: any) => void
+type WrapAsyncError = (onError: WrapAsyncErrorCallback) => WrapAsync
 
-const wrapAsyncError: (onError: WrapAsyncErrorCallback) => WrapAsync = onError => <T extends (...args: any[]) => any | Promise<any>> (
+const wrapAsyncError: WrapAsyncError = onError => <T extends (...args: any[]) => any | Promise<any>> (
   asyncStaff: T | Promise<any>,
 ) => {
   /**
@@ -36,6 +37,7 @@ const wrapAsyncError: (onError: WrapAsyncErrorCallback) => WrapAsync = onError =
 
   /**
    * 2. Function
+   *  pay attention to `this` because we need to pass it down.
    */
   return function (this: any, ...args: Parameters<T>): void {
     try {

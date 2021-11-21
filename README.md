@@ -36,6 +36,17 @@ import { GError } from 'gerror'
 const gerror = GError.from(new Error('test'))
 ```
 
+### `GError.stringify(e: any)`
+
+Convert anything to a `JSON.stringify()`-ed `GError` payload
+
+```ts
+GError.stringify('this is a string error')
+
+// It acepts any type of args
+GError.stringify(new Error() as unknown)
+```
+
 ### `wrapAsyncError()`
 
 It has been designed to convert a Async to Sync, for example:

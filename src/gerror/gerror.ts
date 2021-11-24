@@ -74,8 +74,18 @@ class GError extends Error implements GrpcStatus, EcmaError {
     /**
      * others
      */
+    const payloadType = typeof payload
+
+    if (payload instanceof Object) {
+      try {
+        payload = JSON.stringify(payload)
+      } catch (e) {
+        payload = (e as Error).message
+      }
+    }
+
     const e = new Error(`${payload}`)
-    e.name = 'GError: from(`' + typeof payload + '`)'
+    e.name = 'GError: from(`' + payloadType + '`)'
     return this.from(e)
   }
 

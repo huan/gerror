@@ -1,59 +1,43 @@
 {
-  "name": "gerror",
-  "version": "2.0.0-alpha.0",
-  "description": "Mixer for gRPC Error & ECMAScript Error",
+  "name": "gerror-workspace",
+  "private": true,
+  "description": "GError v2 monorepo: universal error model for ECMAScript, JSON/CQRS, Protobuf, and ConnectRPC.",
   "type": "module",
-  "exports": {
-    ".": {
-      "types": "./dist/esm/src/mod.d.ts",
-      "import": "./dist/esm/src/mod.js"
-    }
-  },
-  "types": "./dist/esm/src/mod.d.ts",
+  "workspaces": [
+    "packages/gerror",
+    "packages/gerror-protobuf",
+    "packages/gerror-connect"
+  ],
   "engines": {
-    "node": ">=20",
-    "npm": ">=9"
+    "node": ">=26",
+    "npm": ">=10"
   },
   "scripts": {
-    "clean": "shx rm -fr dist/*",
-    "build": "tsc",
-    "dist": "npm run clean && npm run build",
-    "lint": "tsc --noEmit",
-    "test:unit": "cd dist/esm && node --test",
-    "test": "npm run build && npm run test:unit"
+    "build": "npm run build --workspaces",
+    "lint": "npm run lint:root && npm run lint --workspaces",
+    "lint:root": "biome lint packages",
+    "test": "npm run lint && npm run test:unit",
+    "test:unit": "npm run test:unit --workspaces",
+    "test:unit:deno": "npm run test:unit:deno --workspaces",
+    "test:examples": "node examples/redux-cqrs.ts && node examples/protobuf-connect.ts",
+    "test:pack": "bash scripts/test-pack.sh",
+    "test:interop": "node --test \"tests/interoperability/*.test.ts\"",
+    "test:browser": "node --test \"tests/browser/*.test.ts\"",
+    "coverage": "npm run coverage:node",
+    "coverage:node": "npm run coverage:node --workspaces --if-present",
+    "coverage:deno": "npm run coverage:deno --workspaces --if-present"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/huan/gerror.git"
   },
-  "keywords": [
-    "error",
-    "grpc",
-    "ecma",
-    "status",
-    "protocol buffer",
-    "dto",
-    "isomorphic",
-    "wintertc"
-  ],
-  "author": "Huan LI <zixia@zixia.net>",
   "license": "Apache-2.0",
-  "bugs": {
-    "url": "https://github.com/huan/gerror/issues"
-  },
-  "homepage": "https://github.com/huan/gerror#readme",
   "devDependencies": {
-    "@types/node": "^22.10.1",
-    "shx": "^0.3.4",
-    "typescript": "^5.7.2"
-  },
-  "dependencies": {},
-  "files": [
-    "dist",
-    "src"
-  ],
-  "publishConfig": {
-    "access": "public",
-    "tag": "next"
+    "@biomejs/biome": "^2.6.5",
+    "@bufbuild/buf": "^1.75.0",
+    "@bufbuild/protoc-gen-es": "^2.17.0",
+    "@types/node": "^26.6.6",
+    "playwright": "^1.65.1",
+    "typescript": "^7.0.2"
   }
 }

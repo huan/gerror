@@ -8,11 +8,7 @@ SRC_VERSION_TS_FILE='src/version.ts'
   exit 1
 }
 
-# The publish job uses this script with OIDC permissions. Read the manifest locally.
-VERSION=$(node --input-type=module -e '
-  import { readFileSync } from "node:fs"
-  console.log(JSON.parse(readFileSync("package.json", "utf8")).version)
-')
+VERSION=$(npx pkg-jq -r .version)
 
 cat <<_SRC_ > ${SRC_VERSION_TS_FILE}
 /**

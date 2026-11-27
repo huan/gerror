@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package gerror.v1;
+
+import "google/rpc/status.proto";
+import "google/protobuf/struct.proto";
+
+message ErrorContext {
+  optional string name = 1;
+  oneof cause {
+    google.rpc.Status error_cause = 2;
+    google.protobuf.Value value_cause = 3;
+    OmittedCause omitted_cause = 4;
+  }
+  repeated google.rpc.Status errors = 5;
+  optional int32 original_rpc_code = 6;
+  optional string original_error_code = 7;
+}
+
+message OmittedCause {
+  enum Reason {
+    REASON_UNSPECIFIED = 0;
+    REASON_CYCLE = 1;
+    REASON_DEPTH_LIMIT = 2;
+    REASON_SIZE_LIMIT = 3;
+    REASON_UNSUPPORTED_VALUE = 4;
+    REASON_REDACTED = 5;
+  }
+  Reason reason = 1;
+}

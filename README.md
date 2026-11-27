@@ -17,12 +17,47 @@ In order to make it easy, we build GError module
 
 ## Features
 
-1. `GError.from(anyting: any)`
-1. `gerror.toJSON()`
+1. **Pure WinterTC Standards**: Universal execution across Node.js >= 20, Deno, Bun, Cloudflare Workers, and modern browsers with zero Node-specific built-in dependencies.
+2. **Canonical `GErrorDTO` Wire Contract**: Plain serializable JSON object for distributed systems, gRPC, Redux, and CQRS events.
+3. **Lossless `toJSON()`**: Recursively serializes nested ES2022 `cause` chains and arbitrary metadata (`data`).
+4. **Distributed Stack Trace Stitching**: Stitches remote error stack traces with local caller call sites across process boundaries.
+5. **Polymorphic Subclass Rehydration**: `GError.from(payload)` preserves subclass types and `instanceof` hierarchies (e.g. `WechatyError extends GError`).
 
 ## Examples
 
-TBW
+### 1. JSON DTO Serialization for Event-Driven Systems (Redux / CQRS)
+
+```ts
+import { GError, type GErrorDTO } from 'gerror'
+
+const error = new GError('Authentication expired', {
+  code: 'AUTH_EXPIRED',
+  details: 'Token expired at 1700000000',
+  data: { userId: 'u123' },
+  cause: new Error('Network timeout'),
+})
+
+// Produces a clean JSON DTO that survives JSON.stringify() and structuredClone()
+const dto: GErrorDTO = error.toJSON()
+const json = JSON.stringify(dto)
+
+// Rehydrates losslessly on remote client with cause chain intact
+const rehydrated = GError.from(JSON.parse(json))
+console.log(rehydrated.code) // 'AUTH_EXPIRED'
+console.log(rehydrated.cause) // Error('Network timeout')
+```
+
+### 2. Distributed Stack Trace Stitching
+
+```ts
+// Remote puppet driver stack is stitched to local caller call-site:
+const clientError = GError.from(remoteDto)
+console.log(clientError.stack)
+// Error: Remote connection failed
+//     at RemotePuppet.connect (/app/driver.js:42:15)
+//     --- remote boundary ---
+//     at Wechaty.start (file:///client/bot.js:15:20)
+```
 
 ## API Reference
 
@@ -75,6 +110,14 @@ asyncFunc() // <- nothing happens (no unhandled rejections)
 1. [Google Cloud APIs - Errors](https://cloud.google.com/apis/design/errors)
 
 ## History
+
+### v2.0 (Nov 2026)
+
+1. Upgrade to GError 2.0 with WinterTC baseline (Node.js >= 20, Deno, Bun, Cloudflare Workers, modern browsers).
+2. Introduce canonical `GErrorDTO` JSON wire contract for CQRS, Redux, and gRPC events.
+3. Add lossless recursive `toJSON()` with ES2022 `cause` support.
+4. Add distributed cross-process stack trace stitching in `GError.from()`.
+5. Support polymorphic subclass rehydration for domain error hierarchies.
 
 ### master v1.0 (Oct 30, 2021)
 

@@ -284,5 +284,88 @@ describe('gerror-protobuf', () => {
       cause: { kind: 'value', value: wideList },
     })
     assert.throws(() => statusToData(wideStatus), RangeError)
+
+    // Enforce message, detail count, detail bytes, and typeUrl limits on statusToData
+    assert.throws(
+      () => statusToData(create(StatusSchema, { code: Code.Unknown, message: 'm'.repeat(8193) })),
+      RangeError,
+    )
+    assert.throws(
+      () =>
+        statusToData(
+          create(StatusSchema, {
+            code: Code.Unknown,
+            message: 'too many details',
+            details: Array.from({ length: 33 }, () =>
+              create(AnySchema, { typeUrl: 'type.googleapis.com/a', value: new Uint8Array(0) }),
+            ),
+          }),
+        ),
+      RangeError,
+    )
+    assert.throws(
+      () =>
+        statusToData(
+          create(StatusSchema, {
+            code: Code.Unknown,
+            message: 'big any',
+            details: [
+              create(AnySchema, { typeUrl: 'type.googleapis.com/a', value: new Uint8Array(16_385) }),
+            ],
+          }),
+        ),
+      RangeError,
+    )
+    assert.throws(
+      () =>
+        statusToData(
+          create(StatusSchema, {
+            code: Code.Unknown,
+            message: 'long typeUrl',
+            details: [
+              create(AnySchema, { typeUrl: 'a'.repeat(513), value: new Uint8Array(0) }),
+            ],
+          }),
+        ),
+      RangeError,
+    )
+
+    // Enforce message, detail count, and aggregate error count limits on dataToStatus
+    assert.throws(
+      () =>
+        dataToStatus({
+          version: 1,
+          code: Code.Unknown,
+          message: 'm'.repeat(8193),
+          details: [],
+        }),
+      RangeError,
+    )
+    assert.throws(
+      () =>
+        dataToStatus({
+          version: 1,
+          code: Code.Unknown,
+          message: 'many details',
+          details: Array.from({ length: 33 }, () => ({ typeUrl: 'a', value: '' })),
+        }),
+      RangeError,
+    )
+    assert.throws(
+      () =>
+        dataToStatus({
+          version: 1,
+          code: Code.Unknown,
+          message: 'many errors',
+          details: [],
+          errors: Array.from({ length: 33 }, () => ({
+            version: 1,
+            code: Code.Unknown,
+            message: 'e',
+            details: [],
+          })),
+        }),
+      RangeError,
+    )
   })
 })

@@ -39,6 +39,16 @@ import { type Status, StatusSchema } from './generated/google/rpc/status_pb.ts'
 
 const MAX_DEPTH = 8
 const MAX_NODES = 128
+const MAX_MESSAGE_BYTES = 8192
+const MAX_DETAILS = 32
+const MAX_DETAIL_BYTES = 16_384
+const MAX_TYPE_URL_BYTES = 512
+const MAX_ERRORS = 32
+const textEncoder = new TextEncoder()
+
+function utf8Bytes (value: string): number {
+  return textEncoder.encode(value).byteLength
+}
 
 const REASON_TO_PROTO: Record<
   Extract<ErrorCause, { readonly kind: 'omitted' }>['reason'],
@@ -74,6 +84,15 @@ function encodeStatusNode (data: GErrorData, depth: number): Status {
   }
   if (!isCanonicalCode(data.code)) {
     throw new TypeError(`Invalid GErrorData code: ${String(data.code)}`)
+  }
+  if (utf8Bytes(data.message) > MAX_MESSAGE_BYTES) {
+    throw new RangeError(`GErrorData.message exceeds ${MAX_MESSAGE_BYTES} UTF-8 bytes`)
+  }
+  if (data.details.length > MAX_DETAILS) {
+    throw new RangeError(`GErrorData.details exceeds maximum count (${MAX_DETAILS})`)
+  }
+  if (data.errors !== undefined && data.errors.length > MAX_ERRORS) {
+    throw new RangeError(`GErrorData.errors exceeds maximum count (${MAX_ERRORS})`)
   }
 
   const details = data.details.map((detail) => {
@@ -161,6 +180,12 @@ function decodeStatusNode (
   if (status.code === 0) {
     throw new TypeError('google.rpc.Status with code 0 (OK) cannot be decoded as GError')
   }
+  if (utf8Bytes(status.message) > MAX_MESSAGE_BYTES) {
+    throw new RangeError(`google.rpc.Status.message exceeds ${MAX_MESSAGE_BYTES} UTF-8 bytes`)
+  }
+  if (status.details.length > MAX_DETAILS) {
+    throw new RangeError(`google.rpc.Status.details exceeds maximum count (${MAX_DETAILS})`)
+  }
 
   let code: Code
   let originalRpcCode: number | undefined
@@ -176,6 +201,12 @@ function decodeStatusNode (
   let stackFromDebugInfo: string | undefined
 
   for (const any of status.details) {
+    if (utf8Bytes(any.typeUrl) > MAX_TYPE_URL_BYTES) {
+      throw new RangeError(`Any.typeUrl exceeds ${MAX_TYPE_URL_BYTES} UTF-8 bytes`)
+    }
+    if (any.value.byteLength > MAX_DETAIL_BYTES) {
+      throw new RangeError(`Any.value exceeds ${MAX_DETAIL_BYTES} bytes`)
+    }
     if (any.typeUrl === ERROR_CONTEXT_TYPE_URL) {
       if (errorContext !== undefined) {
         throw new TypeError('google.rpc.Status contains duplicate gerror.v1.ErrorContext details')
@@ -232,6 +263,9 @@ function decodeStatusNode (
     }
 
     if (errorContext.errors.length > 0) {
+      if (errorContext.errors.length > MAX_ERRORS) {
+        throw new RangeError(`ErrorContext.errors exceeds maximum count (${MAX_ERRORS})`)
+      }
       errors = errorContext.errors.map((member) => decodeStatusNode(member, depth + 1, budget))
     }
   }

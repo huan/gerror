@@ -48,7 +48,7 @@ export function toConnectError (
   error: unknown,
   options?: SerializationOptions,
 ): ConnectError {
-  const gerror = GError.from(error)
+  const gerror = error instanceof ConnectError ? fromConnectError(error) : GError.from(error)
   const status = toStatus(gerror, options)
   const outgoingDetails: OutgoingDetail[] = []
 

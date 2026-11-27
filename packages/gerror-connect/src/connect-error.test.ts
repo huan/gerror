@@ -92,5 +92,11 @@ describe('gerror-connect', () => {
     assert.equal(fromConnectError(deadline).code, Code.DeadlineExceeded)
 
     assert.throws(() => fromConnectError(new Error('plain') as never), TypeError)
+
+    // Converting an existing ConnectError preserves its code and rawMessage
+    const existing = new ConnectError('already connect', ConnectCode.NotFound)
+    const reWrapped = toConnectError(existing)
+    assert.equal(reWrapped.code, ConnectCode.NotFound)
+    assert.equal(reWrapped.rawMessage, 'already connect')
   })
 })

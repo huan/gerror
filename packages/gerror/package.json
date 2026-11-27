@@ -1,0 +1,54 @@
+{
+  "name": "gerror",
+  "version": "2.0.0-alpha.0",
+  "description": "Native by behavior. Standard by semantics. Portable by representation. Serializable by design.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/mod.d.ts",
+      "import": "./dist/mod.js"
+    }
+  },
+  "types": "./dist/mod.d.ts",
+  "engines": {
+    "node": ">=26",
+    "npm": ">=10"
+  },
+  "scripts": {
+    "clean": "rm -rf dist coverage",
+    "build": "tsc -p tsconfig.json",
+    "lint": "npm run lint:biome && npm run lint:ts",
+    "lint:biome": "biome lint src",
+    "lint:ts": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run lint && npm run test:unit",
+    "test:unit": "node --test \"src/**/*.test.ts\"",
+    "test:unit:deno": "env -i PATH=\"$PATH\" HOME=\"$HOME\" CI=\"${CI:-}\" deno test --no-check --allow-read=. src/",
+    "coverage": "npm run coverage:node",
+    "coverage:node": "node --test --experimental-test-coverage --test-coverage-exclude=\"src/**/*.test.ts\" --test-coverage-lines=95 --test-coverage-branches=90 --test-coverage-functions=95 \"src/**/*.test.ts\"",
+    "coverage:deno": "rm -rf coverage/deno && env -i PATH=\"$PATH\" HOME=\"$HOME\" CI=\"${CI:-}\" deno test --no-check --allow-read=. --coverage=coverage/deno/raw src/ && deno coverage coverage/deno/raw --lcov --output=coverage/deno/lcov.info"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/huan/gerror.git"
+  },
+  "keywords": [
+    "error",
+    "grpc",
+    "protobuf",
+    "connectrpc",
+    "wintertc",
+    "serialization"
+  ],
+  "author": "Huan LI <zixia@zixia.net>",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/huan/gerror/issues"
+  },
+  "homepage": "https://github.com/huan/gerror#readme",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

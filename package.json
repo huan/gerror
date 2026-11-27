@@ -1,66 +1,43 @@
 {
-  "name": "gerror",
-  "version": "1.0.16",
-  "description": "Mixer for gRPC Error & ECMAScript Error",
+  "name": "gerror-workspace",
+  "private": true,
+  "description": "GError v2 monorepo: universal error model for ECMAScript, JSON/CQRS, Protobuf, and ConnectRPC.",
   "type": "module",
-  "exports": {
-    ".": {
-      "import": "./dist/esm/src/mod.js",
-      "require": "./dist/cjs/src/mod.js"
-    }
-  },
-  "typings": "./dist/esm/src/mod.d.ts",
+  "workspaces": [
+    "packages/gerror",
+    "packages/gerror-protobuf",
+    "packages/gerror-connect"
+  ],
   "engines": {
-    "node": ">=16",
-    "npm": ">=7"
+    "node": ">=26",
+    "npm": ">=10"
   },
   "scripts": {
-    "clean": "shx rm -fr dist/*",
-    "dist": "npm-run-all clean build dist:commonjs",
-    "build": "tsc && tsc -p tsconfig.cjs.json",
-    "dist:commonjs": "jq -n \"{ type: \\\"commonjs\\\" }\" > dist/cjs/package.json",
-    "lint": "npm run lint:es && npm run lint:ts",
-    "lint:ts": "tsc --isolatedModules --noEmit",
-    "test": "npm-run-all lint test:unit",
-    "test:unit": "cross-env NODE_OPTIONS=\"--no-warnings --loader=ts-node/esm\" tap \"src/**/*.spec.ts\" \"tests/*.spec.ts\"",
-    "test:pack": "bash -x scripts/npm-pack-testing.sh",
-    "lint:es": "eslint --ignore-pattern fixtures/ \"src/**/*.ts\" \"tests/**/*.ts\""
+    "build": "npm run build --workspaces",
+    "lint": "npm run lint:root && npm run lint --workspaces",
+    "lint:root": "biome lint packages",
+    "test": "npm run lint && npm run test:unit",
+    "test:unit": "npm run test:unit --workspaces",
+    "test:unit:deno": "npm run test:unit:deno --workspaces",
+    "test:examples": "node examples/redux-cqrs.ts && node examples/protobuf-connect.ts",
+    "test:pack": "bash scripts/test-pack.sh",
+    "test:interop": "node --test \"tests/interoperability/*.test.ts\"",
+    "test:browser": "node --test \"tests/browser/*.test.ts\"",
+    "coverage": "npm run coverage:node",
+    "coverage:node": "npm run coverage:node --workspaces --if-present",
+    "coverage:deno": "npm run coverage:deno --workspaces --if-present"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/huan/gerror.git"
   },
-  "keywords": [
-    "error",
-    "grpc",
-    "ecma",
-    "status",
-    "protocol buffer"
-  ],
-  "author": "Huan LI <zixia@zixia.net>",
   "license": "Apache-2.0",
-  "bugs": {
-    "url": "https://github.com/huan/gerror/issues"
-  },
-  "homepage": "https://github.com/huan/gerror#readme",
   "devDependencies": {
-    "@chatie/eslint-config": "^1.0.2",
-    "@chatie/git-scripts": "^0.6.2",
-    "@chatie/semver": "^0.4.7",
-    "@chatie/tsconfig": "^0.20.6"
-  },
-  "dependencies": {},
-  "files": [
-    "dist",
-    "src"
-  ],
-  "publishConfig": {
-    "access": "public",
-    "tag": "next"
-  },
-  "git": {
-    "scripts": {
-      "pre-push": "npx git-scripts-pre-push"
-    }
+    "@biomejs/biome": "^2.6.5",
+    "@bufbuild/buf": "^1.75.0",
+    "@bufbuild/protoc-gen-es": "^2.17.0",
+    "@types/node": "^26.6.6",
+    "playwright": "^1.65.1",
+    "typescript": "^7.0.2"
   }
 }

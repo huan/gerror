@@ -19,7 +19,7 @@
     "build": "tsc",
     "dist": "npm run clean && npm run build",
     "lint": "tsc --noEmit",
-    "test:unit": "node --test \"dist/esm/src/**/*.spec.js\" \"dist/esm/tests/**/*.spec.js\"",
+    "test:unit": "cd dist/esm && node --test",
     "test": "npm run build && npm run test:unit"
   },
   "repository": {

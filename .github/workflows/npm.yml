@@ -12,15 +12,18 @@ jobs:
           - macos-latest
           - windows-latest
         node:
-          - 16
+          - 20
+          - 22
+          - 24
+          - 26
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v2
-      - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v2
+      - uses: actions/checkout@v4
+      - name: Use Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: ${{ matrix.node }}
           cache: npm
           cache-dependency-path: package.json
 
@@ -35,10 +38,10 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 16
+          node-version: 20
           cache: npm
           cache-dependency-path: package.json
 
@@ -57,10 +60,10 @@ jobs:
     needs: [build, pack]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 16
+          node-version: 20
           registry-url: https://registry.npmjs.org/
           cache: npm
           cache-dependency-path: package.json
@@ -81,8 +84,8 @@ jobs:
         id: check-branch
         run: |
           if [[ ${{ github.ref }} =~ ^refs/heads/(main|v[0-9]+\.[0-9]+.*)$ ]]; then
-              echo ::set-output name=match::true
-          fi  # See: https://stackoverflow.com/a/58869470/1123955
+              echo "match=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Is A Publish Branch
         if: steps.check-branch.outputs.match == 'true'
         run: |

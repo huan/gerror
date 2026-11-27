@@ -1,88 +1,90 @@
 /**
- * See:
+ * gRPC Status and Code Definitions according to Google API Design Guide:
  *  - https://cloud.google.com/apis/design/errors
- *
- * gRPC Status:
- *
- * The `Status` type defines a logical error model that is suitable for
- * different programming environments, including REST APIs and RPC APIs. It is
- * used by [gRPC](https://github.com/grpc). Each `Status` message contains
- * three pieces of data: error code, error message, and error details.
- * You can find out more about this error model and how to work with it in the
- * [API Design Guide](https://cloud.google.com/apis/design/errors).
- *
- * message Status {
- *   // The status code, which should be an enum value of [google.rpc.Code][google.rpc.Code].
- *   // See: https://github.com/googleapis/googleapis/blob/master/google/rpc/code.proto
- *
- *   int32 code = 1;
- *
- *   // A developer-facing error message, which should be in English. Any
- *   // user-facing error message should be localized and sent in the
- *   // [google.rpc.Status.details][google.rpc.Status.details] field, or localized by the client.
- *
- *   string message = 2;
- *
- *   // A list of messages that carry the error details.  There is a common set of
- *   // message types for APIs to use.
- *
- *   repeated google.protobuf.Any details = 3;
- * }
+ *  - https://github.com/googleapis/googleapis/blob/master/google/rpc/code.proto
  */
 
 /**
- * Credit: https://github.com/grpc/grpc-node/blob/master/packages/grpc-js/src/constants.ts
- *
- * Huan(202110): it seems that the order of the below enum Code is exactly follow the Protobuf enum:
- *  See: https://github.com/googleapis/googleapis/blob/master/google/rpc/code.protodeclare
+ * Standard gRPC status codes (matching google.rpc.Code protobuf enum).
  */
 enum Code {
   OK = 0,
-  CANCELLED,
-  UNKNOWN,
-  INVALID_ARGUMENT,
-  DEADLINE_EXCEEDED,
-  NOT_FOUND,
-  ALREADY_EXISTS,
-  PERMISSION_DENIED,
-  RESOURCE_EXHAUSTED,
-  FAILED_PRECONDITION,
-  ABORTED,
-  OUT_OF_RANGE,
-  UNIMPLEMENTED,
-  INTERNAL,
-  UNAVAILABLE,
-  DATA_LOSS,
-  UNAUTHENTICATED,
+  CANCELLED = 1,
+  UNKNOWN = 2,
+  INVALID_ARGUMENT = 3,
+  DEADLINE_EXCEEDED = 4,
+  NOT_FOUND = 5,
+  ALREADY_EXISTS = 6,
+  PERMISSION_DENIED = 7,
+  RESOURCE_EXHAUSTED = 8,
+  FAILED_PRECONDITION = 9,
+  ABORTED = 10,
+  OUT_OF_RANGE = 11,
+  UNIMPLEMENTED = 12,
+  INTERNAL = 13,
+  UNAVAILABLE = 14,
+  DATA_LOSS = 15,
+  UNAUTHENTICATED = 16,
 }
 
+/**
+ * Pure numeric gRPC status representation for RPC adapter boundaries.
+ */
 interface GrpcStatus {
-  code     : Code | number | string
-  message? : string
-  /**
-   * In gRPC Protobuf, details is a Array
-   *  but here, we only keep the first element (if ther's any)
-   *
-   * The reason is for compatible with `@grpc/grpc-js` package defination:
-   *  @see https://github.com/grpc/grpc-node/blob/4a5c1da93b77cc82e31063ae32990ba2d0883387/packages/grpc-js/src/call-stream.ts#L94-L98
-   *
-   * ```ts
-   * export interface StatusObject {
-   *   code: Status;
-   *   details: string;
-   *   metadata: Metadata;
-   * }
-   * ```
-   */
-  details? : string
+  code: Code | number
+  message?: string
+  details?: string
 }
 
-const isGrpcStatus = (payload: any): payload is GrpcStatus => payload instanceof Object
-  && (typeof payload.code === 'number' || typeof payload.code === 'string')
-  && ['undefined', 'string'].includes(typeof payload.details)
+/**
+ * Strict type guard ensuring payload conforms to numeric GrpcStatus.
+ */
+const isGrpcStatus = (payload: unknown): payload is GrpcStatus =>
+  typeof payload === 'object' &&
+  payload !== null &&
+  !Array.isArray(payload) &&
+  'code' in payload &&
+  typeof (payload as Record<string, unknown>)['code'] === 'number' &&
+  Number.isFinite((payload as Record<string, unknown>)['code']) &&
+  (!('details' in (payload as Record<string, unknown>)) ||
+    (payload as Record<string, unknown>)['details'] === undefined ||
+    typeof (payload as Record<string, unknown>)['details'] === 'string') &&
+  (!('message' in (payload as Record<string, unknown>)) ||
+    (payload as Record<string, unknown>)['message'] === undefined ||
+    typeof (payload as Record<string, unknown>)['message'] === 'string')
+
+/**
+ * Converts a domain code (string or numeric) into a strictly numeric gRPC status code.
+ *
+ * @param code Domain error code (numeric or string)
+ * @param customMapping Optional mapping function for application-specific string codes
+ * @returns Numeric Code enum or number
+ */
+function toNumericGrpcCode (
+  code: number | string | undefined,
+  customMapping?: (domainCode: string) => number | undefined,
+): Code | number {
+  if (typeof code === 'number' && Number.isFinite(code)) {
+    return code
+  }
+  if (typeof code === 'string') {
+    if (customMapping) {
+      const mapped = customMapping(code)
+      if (mapped !== undefined && Number.isFinite(mapped)) {
+        return mapped
+      }
+    }
+    const parsed = Number(code)
+    if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
+      return parsed
+    }
+  }
+  return Code.UNKNOWN
+}
 
 export type { GrpcStatus }
 export {
-  isGrpcStatus,
   Code,
+  isGrpcStatus,
+  toNumericGrpcCode,
 }

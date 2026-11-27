@@ -56,3 +56,19 @@ test('wrapAsyncError() with a Promise value', async () => {
   assert.equal(calls.length, 1, 'should emit error when wrap promise with rejection')
   assert.equal(calls[0]![0], ERROR, 'should emit rejection error when wrap promise with rejection')
 })
+
+test('wrapAsyncError() with synchronous function returning value or throwing', async () => {
+  const calls: any[][] = []
+  const spy = (...args: any[]) => { calls.push(args) }
+  const wrapAsync = wrapAsyncError(spy)
+
+  // Sync return (non-Promise)
+  assert.doesNotThrow(() => (wrapAsync as any)(() => 'sync value')())
+  assert.equal(calls.length, 0)
+
+  // Sync throw
+  const syncError = new Error('sync throw')
+  assert.doesNotThrow(() => (wrapAsync as any)(() => { throw syncError })())
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0]![0], syncError)
+})

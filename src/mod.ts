@@ -6,6 +6,7 @@ import {
   isGError,
   GError,
   type GErrorOptions,
+  type GErrorSubclassFactory,
 }                         from './gerror/gerror.js'
 import type {
   EcmaError,
@@ -15,12 +16,21 @@ import type {
 }                         from './gerror/grpc.js'
 import {
   Code,
+  toNumericGrpcCode,
 }                         from './gerror/grpc.js'
 import type {
   GErrorDTO,
+  JsonObject,
+  JsonValue,
+  JsonPrimitive,
+  JsonArray,
 }                         from './gerror/dto.js'
 import {
   isGErrorDTO,
+  isJsonObject,
+  isJsonValue,
+  normalizeJsonData,
+  normalizeJsonValue,
 }                         from './gerror/dto.js'
 
 import {
@@ -41,6 +51,11 @@ export type {
   GrpcStatus,
   GErrorDTO,
   GErrorOptions,
+  GErrorSubclassFactory,
+  JsonObject,
+  JsonValue,
+  JsonPrimitive,
+  JsonArray,
 }
 export {
   Code,
@@ -48,9 +63,14 @@ export {
   isEcmaError,
   isGError,
   isGErrorDTO,
+  isJsonObject,
+  isJsonValue,
   isGrpcStatus,
+  normalizeJsonData,
+  normalizeJsonValue,
   timeoutPromise,
   TimeoutPromiseGError,
+  toNumericGrpcCode,
   VERSION,
   wrapAsyncError,
 }

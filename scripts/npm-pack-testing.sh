@@ -1,57 +1,56 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
 npm run dist
-npm pack
+TARBALL=$(npm pack)
 
-TMPDIR="/tmp/npm-pack-testing.$$"
-mkdir "$TMPDIR"
-mv *-*.*.*.tgz "$TMPDIR"
-cp tests/fixtures/smoke-testing.ts "$TMPDIR"
+TMPDIR=$(mktemp -d -t gerror-pack-testing.XXXXXX)
+cleanup() {
+  rm -rf "$TMPDIR"
+  rm -f "$TARBALL"
+}
+trap cleanup EXIT
 
-cd $TMPDIR
+cp "$TARBALL" "$TMPDIR/"
+cp tests/fixtures/smoke-testing.ts "$TMPDIR/"
 
-npm init -y
-npm install *-*.*.*.tgz \
+cd "$TMPDIR"
+
+cat << 'EOF' > package.json
+{
+  "name": "gerror-pack-testing-consumer",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true
+}
+EOF
+
+cat << 'EOF' > tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node"],
+    "strict": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "smoke-testing.ts"
+  ]
+}
+EOF
+
+npm install ./"$TARBALL" \
   @types/node \
-  typescript \
-
-#
-# CommonJS
-#
-./node_modules/.bin/tsc \
-  --esModuleInterop \
-  --lib esnext \
-  --noEmitOnError \
-  --noImplicitAny \
-  --skipLibCheck \
-  --target es5 \
-  --module CommonJS \
-  --moduleResolution node \
-  smoke-testing.ts
+  typescript
 
 echo
-echo "CommonJS: pack testing..."
-node smoke-testing.js
-
-#
-# ES Modules
-#
-
-# https://stackoverflow.com/a/59203952/1123955
-echo "`jq '.type="module"' package.json`" > package.json
-
-./node_modules/.bin/tsc \
-  --esModuleInterop \
-  --lib esnext \
-  --noEmitOnError \
-  --noImplicitAny \
-  --skipLibCheck \
-  --target es2020 \
-  --module es2020 \
-  --moduleResolution node \
-  smoke-testing.ts
+echo "ES Module: compiling typed consumer..."
+./node_modules/.bin/tsc
 
 echo
-echo "ES Module: pack testing..."
+echo "ES Module: running pack smoke test..."
 node smoke-testing.js
+
+echo "Pack testing completed successfully!"

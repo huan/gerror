@@ -236,16 +236,23 @@ class GError extends Error implements EcmaError {
 
       if (payload.timestamp !== undefined) {
         instance.timestamp = payload.timestamp
+      } else {
+        instance.timestamp = undefined
       }
 
       if (payload.data !== undefined) {
         instance.data = payload.data
+      } else {
+        instance.data = undefined
       }
 
       // Rehydrate cause independently through base GError factory to prevent subclass leak
       if ('cause' in payload && payload.cause !== undefined) {
         instance.cause = GError.from(payload.cause, { stitchStack: false })
         ;(instance as any)._hasCause = true
+      } else {
+        delete (instance as any).cause
+        ;(instance as any)._hasCause = false
       }
 
       if (payload.stack !== undefined) {
@@ -482,7 +489,11 @@ class GError extends Error implements EcmaError {
       this.details = payloadRec['details'] as string
     } else if (options && 'details' in options && options.details !== undefined) {
       this.details = options.details
-    } else if (typeof messageOrPayload === 'string') {
+    } else if (
+      typeof messageOrPayload === 'string' ||
+      messageOrPayload instanceof Error ||
+      (isEcmaError(messageOrPayload) && !isGrpcStatus(messageOrPayload) && !isGErrorDTO(messageOrPayload))
+    ) {
       this.details = this.stack
     }
 

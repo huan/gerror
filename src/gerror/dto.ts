@@ -191,7 +191,7 @@ export function normalizeJsonValue (
   }
 
   if (value instanceof Date) {
-    return value.toISOString()
+    return Number.isNaN(value.getTime()) ? null : value.toISOString()
   }
 
   if (typeof value === 'function' || typeof value === 'symbol' || value === undefined) {

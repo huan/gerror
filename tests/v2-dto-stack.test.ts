@@ -654,3 +654,63 @@ test('GError 2.0: Preserve exact caller frame after remote boundary for subclass
 
   GError.unregister('SPECIFIC_ERR')
 })
+
+test('GError 2.0: Normalize invalid Date in metadata to null without throwing', async () => {
+  const invalidDate = new Date('invalid date string')
+  const err = new GError('failed', { data: { when: invalidDate, valid: new Date(0) } })
+  assert.equal(err.data?.['when'], null)
+  assert.equal(err.data?.['valid'], '1970-01-01T00:00:00.000Z')
+  assert.doesNotThrow(() => JSON.stringify(err))
+})
+
+test('GError 2.0: Preserve native-error details in direct constructor', async () => {
+  const nativeErr = new Error('database connection failed')
+  const gerr = new GError(nativeErr)
+  assert.equal(gerr.details, nativeErr.stack)
+  assert.equal(gerr.toGrpcStatus().details, nativeErr.stack)
+
+  // Plain gRPC status without details preserves undefined
+  const grpc = new GError({ code: 14, message: 'down' })
+  assert.equal(grpc.details, undefined)
+  assert.equal(grpc.toGrpcStatus().details, undefined)
+
+  // DTO without details preserves undefined
+  const fromDto = new GError({ name: 'Error', message: 'fail', code: 0 })
+  assert.equal(fromDto.details, undefined)
+})
+
+test('GError 2.0: Clear constructor-provided defaults absent from incoming DTOs', async () => {
+  class DefaultedSubclass extends GError {
+    constructor (message?: string, options?: GErrorOptions) {
+      super(message, {
+        cause: new Error('default cause'),
+        data: { defaultKey: 'defaultValue' },
+        timestamp: 999999,
+        ...options,
+      })
+      this.name = 'DefaultedSubclass'
+    }
+  }
+
+  GError.register('DEFAULTED_SUBCLASS', DefaultedSubclass)
+
+  const minimalDto: GErrorDTO = {
+    name: 'DefaultedSubclass',
+    code: 'DEFAULTED_SUBCLASS',
+    message: 'minimal payload',
+  }
+
+  const hydrated = GError.from(minimalDto, { stitchStack: false })
+  assert.equal(hydrated.timestamp, undefined, 'Absence of timestamp in DTO must clear constructor default')
+  assert.equal(hydrated.data, undefined, 'Absence of data in DTO must clear constructor default')
+  assert.equal(hydrated.details, undefined, 'Absence of details in DTO must be undefined')
+  assert.equal(Object.hasOwn(hydrated, 'cause'), false, 'Absence of cause in DTO must clear constructor default')
+
+  const reserialized = hydrated.toJSON()
+  assert.equal('cause' in reserialized, false)
+  assert.equal('data' in reserialized, false)
+  assert.equal('timestamp' in reserialized, false)
+  assert.deepEqual(reserialized, minimalDto)
+
+  GError.unregister('DEFAULTED_SUBCLASS')
+})

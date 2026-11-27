@@ -33,6 +33,16 @@ function safeReadProperty (
   key: PropertyKey,
 ): { readonly present: boolean; readonly value: unknown } {
   try {
+    const ownDesc = Object.getOwnPropertyDescriptor(target, key)
+    if (ownDesc !== undefined) {
+      if ('value' in ownDesc) {
+        return { present: true, value: ownDesc.value }
+      }
+      if (ownDesc.get !== undefined) {
+        return { present: true, value: ownDesc.get.call(target) }
+      }
+      return { present: false, value: undefined }
+    }
     if (!(key in target)) {
       return { present: false, value: undefined }
     }

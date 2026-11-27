@@ -207,5 +207,31 @@ describe('GError serialization (toData / toJSON / stringify)', () => {
     const aggCyclic = new AggregateError([], 'cyc')
     Object.defineProperty(aggCyclic, 'errors', { value: [aggCyclic] })
     assert.throws(() => new GError('outer', { cause: aggCyclic }).toData(), RangeError)
+
+    // Empty AggregateError omits errors field
+    const emptyAgg = GError.from(new AggregateError([], 'empty'))
+    assert.equal(emptyAgg.toData().errors, undefined)
+
+    // Missing stack with diagnostics: 'include'
+    const noStack = new Error('no-stack')
+    noStack.stack = undefined
+    const noStackData = GError.from(noStack).toData({ diagnostics: 'include' })
+    assert.equal(noStackData.diagnostics?.name, 'Error')
+    assert.equal(noStackData.diagnostics?.stack, undefined)
+
+    // Mutating returned toData() snapshot does not affect subsequent calls
+    const source = new GError('isolated', {
+      details: [{ typeUrl: 'type.googleapis.com/a', value: 'AQID' }],
+      cause: { nested: [1] },
+    })
+    const snap1 = source.toData()
+    ;(snap1.details as Array<{ typeUrl: string; value: string }>).push({
+      typeUrl: 'type.googleapis.com/b',
+      value: 'BAU=',
+    })
+    ;((snap1.cause as { value: { nested: number[] } }).value.nested).push(99)
+    const snap2 = source.toData()
+    assert.equal(snap2.details.length, 1)
+    assert.deepEqual(snap2.cause, { kind: 'value', value: { nested: [1] } })
   })
 })

@@ -44,6 +44,7 @@ const MAX_DETAILS = 32
 const MAX_DETAIL_BYTES = 16_384
 const MAX_TYPE_URL_BYTES = 512
 const MAX_ERRORS = 32
+const MAX_BYTES = 65_536
 const textEncoder = new TextEncoder()
 
 function utf8Bytes (value: string): number {
@@ -304,7 +305,11 @@ export function dataToStatus (data: GErrorData): Status {
  * @throws {RangeError} When recursive depth or node budgets are exceeded.
  */
 export function statusToData (status: Status): GErrorData {
-  return decodeStatusNode(status, 0, { remainingNodes: MAX_NODES })
+  const data = decodeStatusNode(status, 0, { remainingNodes: MAX_NODES })
+  if (utf8Bytes(JSON.stringify(data)) > MAX_BYTES) {
+    throw new RangeError(`Decoded Status exceeds maximum serialized size (${MAX_BYTES} bytes)`)
+  }
+  return data
 }
 
 /**

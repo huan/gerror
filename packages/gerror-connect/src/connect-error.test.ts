@@ -6,9 +6,10 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import { create, toBinary } from '@bufbuild/protobuf'
-import { Code as ConnectCode, ConnectError } from '@connectrpc/connect'
+import { file_google_protobuf_empty } from '@bufbuild/protobuf/wkt'
+import { Code as ConnectCode, ConnectError, createClient, createRouterTransport } from '@connectrpc/connect'
 import { Code, GError } from 'gerror'
-import { ErrorInfoSchema, RetryInfoSchema } from 'gerror-protobuf'
+import { ErrorInfoSchema, fromStatus, RetryInfoSchema, StatusSchema, toStatus } from 'gerror-protobuf'
 
 import { fromConnectError, toConnectError } from './mod.ts'
 
@@ -98,5 +99,88 @@ describe('gerror-connect', () => {
     const reWrapped = toConnectError(existing)
     assert.equal(reWrapped.code, ConnectCode.NotFound)
     assert.equal(reWrapped.rawMessage, 'already connect')
+  })
+
+  it('supports unary terminal failures and streaming domain events + terminal failures over ConnectRPC', async () => {
+    const emptySchema = file_google_protobuf_empty.messages[0]!
+    const failUnaryMethod: Record<string, unknown> = {
+      kind: 'rpc' as const,
+      name: 'FailUnary',
+      localName: 'failUnary',
+      methodKind: 'unary' as const,
+      input: emptySchema,
+      output: emptySchema,
+    }
+    const streamEventsMethod: Record<string, unknown> = {
+      kind: 'rpc' as const,
+      name: 'StreamEvents',
+      localName: 'streamEvents',
+      methodKind: 'server_streaming' as const,
+      input: emptySchema,
+      output: StatusSchema,
+    }
+    const testService = {
+      kind: 'service' as const,
+      typeName: 'gerror.test.v1.TestService',
+      name: 'TestService',
+      methods: [failUnaryMethod, streamEventsMethod],
+      method: {
+        failUnary: failUnaryMethod,
+        streamEvents: streamEventsMethod,
+      },
+    }
+    failUnaryMethod['parent'] = testService
+    streamEventsMethod['parent'] = testService
+
+    const transport = createRouterTransport(({ service }) => {
+      service(testService as never, {
+        async failUnary () {
+          throw toConnectError(
+            new GError('unary failed', {
+              code: Code.PermissionDenied,
+              cause: new GError('missing scope', { code: Code.Unauthenticated }),
+            }),
+          )
+        },
+        async *streamEvents () {
+          // 1. Nonterminal domain GError event (stream continues)
+          yield toStatus(new GError('domain warning', { code: Code.FailedPrecondition }))
+          // 2. Terminal RPC failure (stream ends)
+          throw toConnectError(new GError('stream down', { code: Code.Unavailable }))
+        },
+      })
+    })
+
+    const client = createClient(testService as never, transport) as {
+      failUnary: (req: Record<string, never>) => Promise<unknown>
+      streamEvents: (req: Record<string, never>) => AsyncIterable<ReturnType<typeof toStatus>>
+    }
+
+    await assert.rejects(
+      () => client.failUnary({}),
+      (err: unknown) => {
+        const gerr = fromConnectError(err as ConnectError)
+        assert.equal(gerr.code, Code.PermissionDenied)
+        assert.equal(gerr.message, 'unary failed')
+        assert.equal((gerr.cause as GError).code, Code.Unauthenticated)
+        return true
+      },
+    )
+
+    const receivedDomain: GError[] = []
+    let terminal: GError | undefined
+    try {
+      for await (const statusMsg of client.streamEvents({})) {
+        receivedDomain.push(fromStatus(statusMsg))
+      }
+    } catch (err) {
+      terminal = fromConnectError(err as ConnectError)
+    }
+
+    assert.equal(receivedDomain.length, 1)
+    assert.equal(receivedDomain[0]?.code, Code.FailedPrecondition)
+    assert.equal(receivedDomain[0]?.message, 'domain warning')
+    assert.equal(terminal?.code, Code.Unavailable)
+    assert.equal(terminal?.message, 'stream down')
   })
 })

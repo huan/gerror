@@ -30,6 +30,23 @@ async function main (): Promise<void> {
   assert.equal(dto.message, message)
   assert.equal(dto.code, 'CUSTOM_CODE')
 
+  // Direct JSON.stringify(error) calling convention
+  const directJson = JSON.stringify(original)
+  assert.ok(directJson.includes('"message":"smoke testing error"'))
+
+  // Legacy Puppet wire format fixture decoding
+  const puppetWire = {
+    data: JSON.stringify({
+      code: 14,
+      message: 'Puppet unavailable',
+      details: 'Connection lost',
+    }),
+  }
+  const fromPuppet = GError.from(puppetWire)
+  assert.equal(fromPuppet.code, 14)
+  assert.equal(fromPuppet.message, 'Puppet unavailable')
+  assert.equal(fromPuppet.details, 'Connection lost')
+
   // 3. Verify gRPC conversion with numeric boundary
   const grpc: GrpcStatus = original.toGrpcStatus()
   assert.equal(typeof grpc.code, 'number', 'gRPC code must be numeric at adapter boundary')

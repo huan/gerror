@@ -49,10 +49,11 @@ export interface GErrorDTO {
 /**
  * Checks whether an unknown value is a JSON-safe value.
  * Validates finite numbers, arrays, and plain objects while preventing circular references.
+ * Uses an active recursion stack to allow valid DAGs with shared object references.
  */
 export function isJsonValue (
   value: unknown,
-  seen: WeakSet<object> = new WeakSet(),
+  activeStack: Set<object> = new Set(),
 ): value is JsonValue {
   if (value === null || typeof value === 'boolean' || typeof value === 'string') {
     return true
@@ -63,30 +64,32 @@ export function isJsonValue (
   }
 
   if (typeof value === 'object') {
-    if (seen.has(value)) {
+    if (activeStack.has(value)) {
       return false
     }
-    seen.add(value)
+    activeStack.add(value)
 
-    if (Array.isArray(value)) {
-      return value.every(item => isJsonValue(item, seen))
-    }
+    try {
+      if (Array.isArray(value)) {
+        return value.every(item => isJsonValue(item, activeStack))
+      }
 
-    const proto = Object.getPrototypeOf(value)
-    if (proto !== Object.prototype && proto !== null) {
-      return false
-    }
-
-    for (const [key, val] of Object.entries(value)) {
-      if (typeof key !== 'string') {
+      const proto = Object.getPrototypeOf(value)
+      if (proto !== Object.prototype && proto !== null) {
         return false
       }
-      if (val !== undefined && !isJsonValue(val, seen)) {
-        return false
-      }
-    }
 
-    return true
+      for (const key of Object.keys(value)) {
+        const val = (value as Record<string, unknown>)[key]
+        if (val !== undefined && !isJsonValue(val, activeStack)) {
+          return false
+        }
+      }
+
+      return true
+    } finally {
+      activeStack.delete(value)
+    }
   }
 
   return false
@@ -97,12 +100,12 @@ export function isJsonValue (
  */
 export function isJsonObject (
   value: unknown,
-  seen: WeakSet<object> = new WeakSet(),
+  activeStack: Set<object> = new Set(),
 ): value is JsonObject {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return false
   }
-  return isJsonValue(value, seen)
+  return isJsonValue(value, activeStack)
 }
 
 /**
@@ -115,36 +118,57 @@ export function isJsonObject (
  * - Set: converted to Array.
  * - Map: converted to plain object.
  * - Circular references: replaced with '[Circular]'.
+ * - Own '__proto__' properties: safely preserved without mutating object prototypes.
  * - Functions / symbols / undefined: omitted from objects.
  */
 export function normalizeJsonData (
   data: unknown,
-  seen: WeakSet<object> = new WeakSet(),
+  activeStack: Set<object> = new Set(),
 ): JsonObject | undefined {
   if (data === null || typeof data !== 'object') {
     return undefined
   }
 
-  if (seen.has(data)) {
+  if (activeStack.has(data)) {
     return { '[Circular]': true }
   }
-  seen.add(data)
+  activeStack.add(data)
 
-  const entries = data instanceof Map
-    ? Array.from(data.entries())
-    : Object.entries(data)
+  try {
+    const result: JsonObject = {}
 
-  const result: JsonObject = {}
-
-  for (const [key, val] of entries) {
-    const stringKey = String(key)
-    const normalizedVal = normalizeJsonValue(val, seen)
-    if (normalizedVal !== undefined) {
-      result[stringKey] = normalizedVal
+    if (data instanceof Map) {
+      for (const [key, val] of data.entries()) {
+        const stringKey = String(key)
+        const normalizedVal = normalizeJsonValue(val, activeStack)
+        if (normalizedVal !== undefined) {
+          Object.defineProperty(result, stringKey, {
+            value: normalizedVal,
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          })
+        }
+      }
+    } else {
+      for (const key of Object.keys(data)) {
+        const val = (data as Record<string, unknown>)[key]
+        const normalizedVal = normalizeJsonValue(val, activeStack)
+        if (normalizedVal !== undefined) {
+          Object.defineProperty(result, key, {
+            value: normalizedVal,
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          })
+        }
+      }
     }
-  }
 
-  return result
+    return result
+  } finally {
+    activeStack.delete(data)
+  }
 }
 
 /**
@@ -152,7 +176,7 @@ export function normalizeJsonData (
  */
 export function normalizeJsonValue (
   value: unknown,
-  seen: WeakSet<object> = new WeakSet(),
+  activeStack: Set<object> = new Set(),
 ): JsonValue | undefined {
   if (value === null || typeof value === 'boolean' || typeof value === 'string') {
     return value
@@ -175,38 +199,53 @@ export function normalizeJsonValue (
   }
 
   if (typeof value === 'object') {
-    if (seen.has(value)) {
+    if (activeStack.has(value)) {
       return '[Circular]'
     }
-    seen.add(value)
+    activeStack.add(value)
 
-    if (value instanceof Set || Array.isArray(value)) {
-      const arr = Array.from(value)
-      return arr.map(item => {
-        const norm = normalizeJsonValue(item, seen)
-        return norm === undefined ? null : norm
-      })
-    }
+    try {
+      if (value instanceof Set || Array.isArray(value)) {
+        const arr = Array.from(value)
+        return arr.map(item => {
+          const norm = normalizeJsonValue(item, activeStack)
+          return norm === undefined ? null : norm
+        })
+      }
 
-    if (value instanceof Map) {
+      if (value instanceof Map) {
+        const obj: JsonObject = {}
+        for (const [k, v] of value.entries()) {
+          const norm = normalizeJsonValue(v, activeStack)
+          if (norm !== undefined) {
+            Object.defineProperty(obj, String(k), {
+              value: norm,
+              writable: true,
+              enumerable: true,
+              configurable: true,
+            })
+          }
+        }
+        return obj
+      }
+
       const obj: JsonObject = {}
-      for (const [k, v] of value.entries()) {
-        const norm = normalizeJsonValue(v, seen)
+      for (const key of Object.keys(value)) {
+        const val = (value as Record<string, unknown>)[key]
+        const norm = normalizeJsonValue(val, activeStack)
         if (norm !== undefined) {
-          obj[String(k)] = norm
+          Object.defineProperty(obj, key, {
+            value: norm,
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          })
         }
       }
       return obj
+    } finally {
+      activeStack.delete(value)
     }
-
-    const obj: JsonObject = {}
-    for (const [k, v] of Object.entries(value)) {
-      const norm = normalizeJsonValue(v, seen)
-      if (norm !== undefined) {
-        obj[k] = norm
-      }
-    }
-    return obj
   }
 
   return undefined
@@ -225,73 +264,77 @@ export function normalizeJsonValue (
  */
 export const isGErrorDTO = (
   payload: unknown,
-  seen: WeakSet<object> = new WeakSet(),
+  activeStack: Set<object> = new Set(),
 ): payload is GErrorDTO => {
   if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
     return false
   }
 
-  if (seen.has(payload)) {
+  if (activeStack.has(payload)) {
     return false
   }
-  seen.add(payload)
+  activeStack.add(payload)
 
-  const candidate = payload as Record<string, unknown>
+  try {
+    const candidate = payload as Record<string, unknown>
 
-  // Required name
-  if (typeof candidate['name'] !== 'string') {
-    return false
-  }
-
-  // Required message
-  if (typeof candidate['message'] !== 'string') {
-    return false
-  }
-
-  // Required code (finite number or string)
-  const code = candidate['code']
-  if (typeof code === 'number') {
-    if (!Number.isFinite(code)) {
+    // Required name
+    if (typeof candidate['name'] !== 'string') {
       return false
     }
-  } else if (typeof code !== 'string') {
-    return false
-  }
 
-  // Optional details
-  if ('details' in candidate && candidate['details'] !== undefined) {
-    if (typeof candidate['details'] !== 'string') {
+    // Required message
+    if (typeof candidate['message'] !== 'string') {
       return false
     }
-  }
 
-  // Optional stack
-  if ('stack' in candidate && candidate['stack'] !== undefined) {
-    if (typeof candidate['stack'] !== 'string') {
+    // Required code (finite number or string)
+    const code = candidate['code']
+    if (typeof code === 'number') {
+      if (!Number.isFinite(code)) {
+        return false
+      }
+    } else if (typeof code !== 'string') {
       return false
     }
-  }
 
-  // Optional timestamp
-  if ('timestamp' in candidate && candidate['timestamp'] !== undefined) {
-    if (typeof candidate['timestamp'] !== 'number' || !Number.isFinite(candidate['timestamp'])) {
-      return false
+    // Optional details
+    if ('details' in candidate && candidate['details'] !== undefined) {
+      if (typeof candidate['details'] !== 'string') {
+        return false
+      }
     }
-  }
 
-  // Optional data
-  if ('data' in candidate && candidate['data'] !== undefined) {
-    if (!isJsonObject(candidate['data'], seen)) {
-      return false
+    // Optional stack
+    if ('stack' in candidate && candidate['stack'] !== undefined) {
+      if (typeof candidate['stack'] !== 'string') {
+        return false
+      }
     }
-  }
 
-  // Optional cause (recursively checked)
-  if ('cause' in candidate && candidate['cause'] !== undefined) {
-    if (!isGErrorDTO(candidate['cause'], seen)) {
-      return false
+    // Optional timestamp
+    if ('timestamp' in candidate && candidate['timestamp'] !== undefined) {
+      if (typeof candidate['timestamp'] !== 'number' || !Number.isFinite(candidate['timestamp'])) {
+        return false
+      }
     }
-  }
 
-  return true
+    // Optional data
+    if ('data' in candidate && candidate['data'] !== undefined) {
+      if (!isJsonObject(candidate['data'], activeStack)) {
+        return false
+      }
+    }
+
+    // Optional cause (recursively checked)
+    if ('cause' in candidate && candidate['cause'] !== undefined) {
+      if (!isGErrorDTO(candidate['cause'], activeStack)) {
+        return false
+      }
+    }
+
+    return true
+  } finally {
+    activeStack.delete(payload)
+  }
 }

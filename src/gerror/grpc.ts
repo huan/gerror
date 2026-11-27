@@ -68,13 +68,17 @@ function toNumericGrpcCode (
     return code
   }
   if (typeof code === 'string') {
+    const trimmed = code.trim()
+    if (!trimmed) {
+      return Code.UNKNOWN
+    }
     if (customMapping) {
       const mapped = customMapping(code)
       if (mapped !== undefined && Number.isFinite(mapped)) {
         return mapped
       }
     }
-    const parsed = Number(code)
+    const parsed = Number(trimmed)
     if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
       return parsed
     }

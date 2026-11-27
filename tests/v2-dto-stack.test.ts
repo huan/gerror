@@ -4,9 +4,11 @@ import assert from 'node:assert/strict'
 import {
   GError,
   isGErrorDTO,
+  isJsonObject,
   Code,
   TimeoutPromiseGError,
   type GErrorDTO,
+  type GErrorOptions,
   type GrpcStatus,
 } from '../src/mod.js'
 
@@ -409,4 +411,246 @@ test('GError 2.0: Preserve optional field absence when rehydrating DTO with stit
   assert.equal('details' in reserialized, false)
   assert.equal('stack' in reserialized, false)
   assert.deepEqual(reserialized, minimalDto)
+})
+
+test('GError 2.0: JSON.stringify calling convention with string key', async () => {
+  const err = new GError('root error')
+  const direct = JSON.stringify(err)
+  assert.equal(direct, JSON.stringify(err.toJSON()))
+
+  const nested = JSON.stringify({ error: err })
+  assert.ok(nested.includes('"message":"root error"'))
+
+  const arr = JSON.stringify([err, new GError('second error')])
+  assert.ok(arr.includes('"message":"root error"'))
+  assert.ok(arr.includes('"message":"second error"'))
+})
+
+test('GError 2.0: Native error cause cycle termination with [Circular]', async () => {
+  const e = new Error('native failure')
+  ;(e as any).cause = e
+  const g = GError.from(e)
+  const dto = g.toJSON()
+  assert.equal(dto.cause?.message, 'native failure')
+  assert.equal(dto.cause?.cause?.message, '[Circular]')
+  assert.doesNotThrow(() => JSON.stringify(g))
+
+  // Mutual native cycle: e1 -> e2 -> e1
+  const e1 = new Error('native e1')
+  const e2 = new Error('native e2')
+  ;(e1 as any).cause = e2
+  ;(e2 as any).cause = e1
+  const g1 = GError.from(e1)
+  const dto1 = g1.toJSON()
+  assert.equal(dto1.cause?.message, 'native e2')
+  assert.equal(dto1.cause?.cause?.cause?.message, '[Circular]')
+  assert.doesNotThrow(() => JSON.stringify(g1))
+})
+
+test('GError 2.0: Shared object DAG in metadata preserves values without [Circular]', async () => {
+  const shared = { userId: '123', meta: { region: 'us-west' } }
+  const err = new GError('dag', { data: { primary: shared, secondary: shared } })
+  assert.deepEqual(err.data?.['primary'], shared)
+  assert.deepEqual(err.data?.['secondary'], shared)
+
+  const dto = err.toJSON()
+  assert.deepEqual(dto.data?.['primary'], shared)
+  assert.deepEqual(dto.data?.['secondary'], shared)
+
+  assert.ok(isJsonObject({ a: shared, b: shared }))
+})
+
+test('GError 2.0: __proto__ in metadata preserved as own property without prototype pollution', async () => {
+  const parsed = JSON.parse('{"__proto__":{"polluted":true},"safe":42}')
+  const err = new GError('proto test', { data: parsed })
+  assert.equal(err.data?.['safe'], 42)
+  assert.ok(Object.prototype.hasOwnProperty.call(err.data, '__proto__'))
+  assert.equal(({} as any).polluted, undefined)
+  assert.equal(Object.getPrototypeOf(err.data!), Object.prototype)
+})
+
+test('GError 2.0: Blank and whitespace string codes map to Code.UNKNOWN', async () => {
+  assert.equal(new GError('msg', { code: '' }).toGrpcStatus().code, Code.UNKNOWN)
+  assert.equal(new GError('msg', { code: '   ' }).toGrpcStatus().code, Code.UNKNOWN)
+  assert.equal(new GError('msg', { code: '\t\n' }).toGrpcStatus().code, Code.UNKNOWN)
+})
+
+test('GError 2.0: Preserve decoding for existing Puppet wire format (v1 & Wechaty event bridge)', async () => {
+  // 1. Bare JSON string preserving UNAVAILABLE (14), message, details, and stack
+  const wire = JSON.stringify({
+    code: 14,
+    message: 'Puppet gRPC Unavailable',
+    details: 'Connection lost to server',
+    stack: 'Error: Puppet gRPC Unavailable\n    at PuppetService.call (/var/puppet/service.js:10:5)',
+  })
+  const fromBareString = GError.from(wire)
+  assert.equal(fromBareString.code, 14)
+  assert.equal(fromBareString.message, 'Puppet gRPC Unavailable')
+  assert.equal(fromBareString.details, 'Connection lost to server')
+  assert.ok(fromBareString.stack?.includes('--- remote boundary ---'))
+  assert.ok(fromBareString.stack?.includes('PuppetService.call'))
+
+  // 2. Puppet event payload { data: wireJsonString }
+  const puppetEvent = { data: wire }
+  const fromPuppetEvent = GError.from(puppetEvent)
+  assert.equal(fromPuppetEvent.code, 14)
+  assert.equal(fromPuppetEvent.message, 'Puppet gRPC Unavailable')
+  assert.equal(fromPuppetEvent.details, 'Connection lost to server')
+  assert.ok(fromPuppetEvent.stack?.includes('--- remote boundary ---'))
+
+  // 3. Puppet event payload { data: 'plain text error' }
+  const plainEvent = { data: 'Puppet crashed unexpectedly' }
+  const fromPlain = GError.from(plainEvent)
+  assert.equal(fromPlain.message, 'Puppet crashed unexpectedly')
+  assert.equal(fromPlain.code, Code.UNKNOWN)
+})
+
+test('GError 2.0: Strict decoder GError.fromJSON rejects malformed DTOs with TypeError', async () => {
+  // Numeric-code DTO with string timestamp and malformed cause
+  assert.throws(() => {
+    GError.fromJSON({
+      name: 'Error',
+      message: 'fail',
+      code: 14,
+      timestamp: '2026-01-01' as any,
+      cause: 123 as any,
+    })
+  }, /malformed DTO.*timestamp/)
+
+  // String-code DTO with stack: 42
+  assert.throws(() => {
+    GError.fromJSON({
+      name: 'CustomError',
+      message: 'fail',
+      code: 'ERR_CUSTOM',
+      stack: 42 as any,
+    })
+  }, /malformed DTO.*stack/)
+
+  // Numeric-code DTO with malformed cause
+  assert.throws(() => {
+    GError.fromJSON({
+      name: 'Error',
+      message: 'fail',
+      code: 14,
+      cause: 'invalid cause' as any,
+    })
+  }, /malformed DTO.*cause/)
+
+  // Valid GrpcStatus
+  const grpcErr = GError.fromJSON({ code: 14, message: 'Unavailable', details: 'rpc down' })
+  assert.equal(grpcErr.code, 14)
+  assert.equal(grpcErr.message, 'Unavailable')
+  assert.equal(grpcErr.details, 'rpc down')
+
+  // Valid EcmaError
+  const ecmaErr = GError.fromJSON({ name: 'TypeError', message: 'bad argument', stack: 'TypeError: bad argument\n    at test.js:1:1' })
+  assert.equal(ecmaErr.name, 'TypeError')
+  assert.equal(ecmaErr.message, 'bad argument')
+  assert.ok(ecmaErr.stack?.includes('test.js:1:1'))
+})
+
+test('GError 2.0: Apply shared hydration to registered subclasses and domain hierarchies', async () => {
+  class DomainError extends GError {}
+  class AuthDomainError extends DomainError {
+    constructor(message?: string, options?: GErrorOptions) {
+      super(message, options)
+      this.name = 'AuthDomainError'
+    }
+  }
+  class PaymentDomainError extends DomainError {}
+
+  // Register factory callback that constructs from message only
+  GError.register('AUTH_EXPIRED', (dto: GErrorDTO) => new AuthDomainError(dto.message))
+
+  const fullDto: GErrorDTO = {
+    name: 'AuthDomainError',
+    code: 'AUTH_EXPIRED',
+    message: 'Session token expired',
+    details: 'Expired at 1700000000',
+    timestamp: 1700000000123,
+    data: { sessionId: 'xyz-999' },
+    stack: 'Error: Session token expired\n    at authService.ts:50:10',
+    cause: {
+      name: 'Error',
+      code: 14,
+      message: 'Redis cluster unreachable',
+    },
+  }
+
+  // 1. Dispatch through GError.from(fullDto)
+  const err = GError.from(fullDto)
+  assert.ok(err instanceof AuthDomainError, 'Must be instance of AuthDomainError')
+  assert.ok(err instanceof DomainError, 'Must be instance of DomainError')
+  assert.equal(err.code, 'AUTH_EXPIRED', 'Must preserve code')
+  assert.equal(err.details, 'Expired at 1700000000', 'Must preserve details')
+  assert.equal(err.timestamp, 1700000000123, 'Must preserve timestamp')
+  assert.deepEqual(err.data, { sessionId: 'xyz-999' }, 'Must preserve data')
+  assert.ok(err.cause instanceof GError, 'Must rehydrate cause as GError')
+  assert.equal((err.cause as GError).message, 'Redis cluster unreachable')
+  assert.ok(err.stack?.includes('--- remote boundary ---'), 'Must stitch stack')
+  assert.ok(err.stack?.includes('authService.ts:50:10'))
+
+  // 2. Dispatch through DomainError.from(fullDto)
+  const domainErr = DomainError.from(fullDto)
+  assert.ok(domainErr instanceof AuthDomainError, 'Domain base class dispatch must resolve to AuthDomainError')
+  assert.equal(domainErr.code, 'AUTH_EXPIRED')
+  assert.equal(domainErr.timestamp, 1700000000123)
+
+  // 3. Dispatch through unrelated subclass PaymentDomainError.from(fullDto)
+  const paymentErr = PaymentDomainError.from(fullDto)
+  assert.ok(paymentErr instanceof PaymentDomainError, 'Unrelated domain subclass must not be replaced by AuthDomainError')
+  assert.ok(!(paymentErr instanceof AuthDomainError))
+
+  GError.unregister('AUTH_EXPIRED')
+})
+
+test('GError 2.0: Preserve exact caller frame after remote boundary for subclass and registry calls', async () => {
+  class SpecificError extends GError {}
+  GError.register('SPECIFIC_ERR', SpecificError)
+
+  const dto: GErrorDTO = {
+    name: 'SpecificError',
+    code: 'SPECIFIC_ERR',
+    message: 'remote error',
+    stack: 'Error: remote error\n    at remoteWorker.js:5:10',
+  }
+
+  function callDirectSubclass (): SpecificError {
+    return SpecificError.from(dto)
+  }
+
+  function callRegistryDispatch (): GError {
+    return GError.from(dto)
+  }
+
+  function callFromJSON (): GError {
+    return GError.fromJSON(JSON.stringify(dto))
+  }
+
+  const directErr = callDirectSubclass()
+  const directBoundary = directErr.stack!.indexOf('--- remote boundary ---')
+  const directAfter = directErr.stack!.slice(directBoundary).split('\n').slice(1)
+  assert.ok(directAfter.length > 0)
+  assert.ok(directAfter[0]?.includes('callDirectSubclass'), `Expected callDirectSubclass frame, got: ${directAfter[0]}`)
+  assert.ok(!directAfter[0]?.includes('SpecificError.from'))
+  assert.ok(!directAfter[0]?.includes('GError.from'))
+
+  const registryErr = callRegistryDispatch()
+  const regBoundary = registryErr.stack!.indexOf('--- remote boundary ---')
+  const regAfter = registryErr.stack!.slice(regBoundary).split('\n').slice(1)
+  assert.ok(regAfter.length > 0)
+  assert.ok(regAfter[0]?.includes('callRegistryDispatch'), `Expected callRegistryDispatch frame, got: ${regAfter[0]}`)
+  assert.ok(!regAfter[0]?.includes('GError.from'))
+  assert.ok(!regAfter[0]?.includes('SpecificError.from'))
+
+  const jsonErr = callFromJSON()
+  const jsonBoundary = jsonErr.stack!.indexOf('--- remote boundary ---')
+  const jsonAfter = jsonErr.stack!.slice(jsonBoundary).split('\n').slice(1)
+  assert.ok(jsonAfter.length > 0)
+  assert.ok(jsonAfter[0]?.includes('callFromJSON'), `Expected callFromJSON frame, got: ${jsonAfter[0]}`)
+  assert.ok(!jsonAfter[0]?.includes('fromJSON'))
+  assert.ok(!jsonAfter[0]?.includes('GError.from'))
+
+  GError.unregister('SPECIFIC_ERR')
 })

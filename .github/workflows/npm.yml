@@ -1,4 +1,4 @@
-name: CI
+name: NPM
 
 on: [push, pull_request]
 
@@ -42,3 +42,65 @@ jobs:
 
       - name: Examples, Pack, Interop & Browser Tests
         run: npm run test:examples && npm run test:pack && npm run test:interop && npm run test:browser
+
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    name: Publish (Trusted Publishing)
+    needs: [verify]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Use Node.js 26
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          registry-url: https://registry.npmjs.org/
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build packages
+        run: npm run build
+
+      - name: Publish workspace packages
+        shell: bash
+        run: |
+          for pkg in gerror gerror-protobuf gerror-connect; do
+            manifest="packages/$pkg/package.json"
+            read -r name version < <(node --input-type=module -e '
+              import { readFileSync } from "node:fs"
+              const { name, version } = JSON.parse(readFileSync(process.argv[1], "utf8"))
+              console.log(name, version)
+            ' "$manifest")
+
+            published=$(npm view "$name" versions --json 2>/dev/null | node --input-type=module -e '
+              import { readFileSync } from "node:fs"
+              const raw = readFileSync(0, "utf8").trim()
+              if (!raw) {
+                console.log("false")
+                process.exit(0)
+              }
+              const versions = JSON.parse(raw)
+              console.log(String([versions].flat().includes(process.argv[1])))
+            ' "$version" || echo "false")
+
+            if [[ $published == "true" ]]; then
+              echo "$name@$version already exists on npm, skipping publish."
+              continue
+            fi
+
+            tag=latest
+            if [[ ${version%%+*} == *-* ]]; then
+              tag=next
+            fi
+
+            echo "Publishing $name@$version with tag $tag..."
+            npm publish --workspace "$name" --access public --tag "$tag"
+          done

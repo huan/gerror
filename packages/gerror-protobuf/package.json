@@ -1,6 +1,6 @@
 {
   "name": "gerror-protobuf",
-  "version": "2.0.0-alpha.0",
+  "version": "2.1.0-alpha.0",
   "description": "Protobuf and google.rpc.Status adapter for GError v2.",
   "type": "module",
   "exports": {
@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.17.0",
-    "gerror": "2.0.0-alpha.0"
+    "gerror": "2.1.0-alpha.0"
   },
   "repository": {
     "type": "git",

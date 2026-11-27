@@ -12,163 +12,227 @@ import {
 import {
   isPuppetEventErrorPayload,
 }                               from './puppet.js'
+import type { GErrorDTO }       from './dto.js'
+import { isGErrorDTO }          from './dto.js'
 
-const isGError = (payload: any): payload is GError => payload instanceof Object
-  && isEcmaError(payload)
-  && isGrpcStatus(payload)
+export interface GErrorOptions {
+  code?: number | string
+  details?: string
+  cause?: unknown
+  data?: Record<string, unknown>
+  stack?: string
+  name?: string
+}
+
+const isGError = (payload: any): payload is GError =>
+  payload instanceof Error &&
+  'code' in payload &&
+  'toJSON' in payload &&
+  typeof (payload as any).toJSON === 'function'
 
 class GError extends Error implements GrpcStatus, EcmaError {
 
-  /**
-   * GrpcStatus additional properties
-   */
-  code     : number
-  details? : string
+  code: number | string
+  details?: string
+  data?: Record<string, unknown>
 
   static stringify (payload: any): string {
     return JSON.stringify(
-      this.from(payload),
+      this.from(payload).toJSON(),
     )
   }
 
   /**
-   * GError.from() supports:
-   *  - string
-   *  - Error instance
-   *  - GError instance
-   *  - GrpcStatus object
-   *  - EcmaError object
-   *  - GError object
-   *  - PuppetEventErrorPayload object/string
+   * Universal, polymorphic factory:
+   * Rehydrates GError (or subclasses) from string, Error, GErrorDTO, GrpcStatus, EcmaError, etc.
    */
-  static from (payload: any): GError {
-    /**
-     * Huan(202110): in case of the payload is a Puppet Error Payload
-     *  CAUTION: we must make sure the payload with a { data } property
-     *    can be only the EventErrorPayload
-     */
+  static from<T extends typeof GError>(
+    this: T,
+    payload: unknown,
+    options?: { stitchStack?: boolean },
+  ): InstanceType<T> {
     if (isPuppetEventErrorPayload(payload)) {
       payload = payload.data
     }
 
-    /**
-     * Error, GError, GrpcStatus, EcmaError, GError, and string
-     */
-    if (payload instanceof Object || typeof payload === 'string') {
-      try {
-        return this.fromJSON(payload)
-      } catch (_) {
-        // ignore any error and pass on
-      }
-    }
-
-    /**
-     * `string` that can not be parsed to JSON
-     */
+    // Try parsing string as JSON first
     if (typeof payload === 'string') {
-      const e = new Error(payload)
-      e.name = 'GError'
-      return this.from(e)
-    }
-
-    /**
-     * others
-     */
-    const payloadType = typeof payload
-
-    if (payload instanceof Object) {
       try {
-        payload = JSON.stringify(payload)
-      } catch (e) {
-        payload = (e as Error).message
+        const parsed = JSON.parse(payload)
+        if (typeof parsed === 'object' && parsed !== null) {
+          return this.from(parsed, options)
+        }
+      } catch {
+        // Plain non-JSON string
+        const instance = new this(payload)
+        return instance as InstanceType<T>
       }
     }
 
-    const e = new Error(`${payload}`)
-    e.name = 'GError: from(`' + payloadType + '`)'
-    return this.from(e)
+    if (payload instanceof this) {
+      return payload as InstanceType<T>
+    }
+
+    if (payload instanceof Error) {
+      const gerrorOpts: GErrorOptions = {
+        cause: payload.cause,
+        stack: payload.stack,
+        name: payload.name,
+      }
+      if ('code' in payload && (typeof (payload as any).code === 'number' || typeof (payload as any).code === 'string')) {
+        gerrorOpts.code = (payload as any).code
+      }
+      if ('details' in payload && typeof (payload as any).details === 'string') {
+        gerrorOpts.details = (payload as any).details
+      }
+      if ('data' in payload && typeof (payload as any).data === 'object') {
+        gerrorOpts.data = (payload as any).data
+      }
+
+      const instance = new this(payload.message, gerrorOpts)
+      return instance as InstanceType<T>
+    }
+
+    if (isGErrorDTO(payload)) {
+      const gerrorOpts: GErrorOptions = {
+        code: payload.code,
+        details: payload.details,
+        data: payload.data,
+        name: payload.name,
+      }
+
+      if (payload.cause) {
+        gerrorOpts.cause = this.from(payload.cause, { stitchStack: false })
+      }
+
+      const instance = new this(payload.message, gerrorOpts)
+
+      // Stitch remote stack with local call-site stack
+      if (payload.stack) {
+        if (options?.stitchStack !== false) {
+          const localError = new Error()
+          const localLines = localError.stack ? localError.stack.split('\n').slice(2) : []
+          instance.stack = `${payload.stack}\n    --- remote boundary ---\n${localLines.join('\n')}`
+        } else {
+          instance.stack = payload.stack
+        }
+      }
+
+      return instance as InstanceType<T>
+    }
+
+    if (isGrpcStatus(payload)) {
+      const instance = new this(payload.message || '', {
+        code: payload.code,
+        details: payload.details,
+      })
+      return instance as InstanceType<T>
+    }
+
+    if (isEcmaError(payload)) {
+      const instance = new this(payload.message, {
+        name: payload.name,
+        stack: payload.stack,
+      })
+      return instance as InstanceType<T>
+    }
+
+    // Fallback for objects or other primitives
+    let message: string
+    if (typeof payload === 'object' && payload !== null) {
+      try {
+        message = JSON.stringify(payload)
+      } catch (e) {
+        message = (e as Error).message
+      }
+    } else {
+      message = String(payload)
+    }
+
+    const instance = new this(message)
+    return instance as InstanceType<T>
   }
 
   /**
-   * From a gRPC standard error
-   *  Protobuf
+   * From a gRPC standard error / Protobuf / DTO
    */
-  public static fromJSON (payload: string | GrpcStatus | EcmaError) {
-    if (typeof payload === 'string') {
-      payload = JSON.parse(payload)
-    }
-
-    if (!isEcmaError(payload) && !isGrpcStatus(payload)) {
-      throw new Error('payload is neither EcmaError nor GrpcStatus')
-    }
-
-    const e = new this(payload)
-    return e
+  public static fromJSON<T extends typeof GError>(
+    this: T,
+    payload: string | GrpcStatus | EcmaError | GErrorDTO,
+  ): InstanceType<T> {
+    return this.from(payload)
   }
 
-  constructor (
-    payload: GrpcStatus | EcmaError,
+  constructor(
+    messageOrPayload?: string | GrpcStatus | EcmaError | GErrorDTO,
+    options?: GErrorOptions,
   ) {
-    super()
+    let resolvedMessage = ''
+    let resolvedOptions: GErrorOptions = options ?? {}
 
-    /**
-     * Common properties
-     */
-    this.message = payload.message || ''
-
-    if (isGError(payload)) {
-      this.code    = payload.code
-      this.details = payload.details
-      this.name    = payload.name
-      this.stack   = payload.stack
-
-    } else if (isGrpcStatus(payload)) {
-      this.code    = payload.code
-      this.details = payload.details
-      /**
-       * Convert gRPC error to EcmaError
-       */
-      this.name = Array.isArray(payload.details) && payload.details.length > 0
-        ? payload.details[0]
-        : Code[this.code] || String(this.code)
-
-    } else if (isEcmaError(payload)) {
-      this.name  = payload.name
-      this.stack = payload.stack
-      /**
-       * Convert EcmaError to gRPC error
-       */
-      this.code     = Code.UNKNOWN
-      this.details  = payload.stack
-
-    } else {
-      throw new Error('payload is neither EcmaError nor GrpcStatus')
+    if (typeof messageOrPayload === 'string') {
+      resolvedMessage = messageOrPayload
+    } else if (typeof messageOrPayload === 'object' && messageOrPayload !== null) {
+      resolvedMessage = (messageOrPayload as any).message ?? ''
+      resolvedOptions = {
+        ...resolvedOptions,
+        code: (messageOrPayload as any).code,
+        details: (messageOrPayload as any).details,
+        cause: (messageOrPayload as any).cause ?? resolvedOptions.cause,
+        data: (messageOrPayload as any).data ?? resolvedOptions.data,
+        stack: (messageOrPayload as any).stack ?? resolvedOptions.stack,
+        name: (messageOrPayload as any).name ?? resolvedOptions.name,
+      }
     }
+
+    super(resolvedMessage, { cause: resolvedOptions.cause })
+
+    this.code = resolvedOptions.code ?? Code.UNKNOWN
+    this.data = resolvedOptions.data
+
+    if (resolvedOptions.name) {
+      this.name = resolvedOptions.name
+    } else {
+      this.name = this.constructor.name || 'GError'
+    }
+
+    if (resolvedOptions.stack) {
+      this.stack = resolvedOptions.stack
+    }
+
+    this.details = resolvedOptions.details ?? this.stack
   }
 
-  public toJSON (): GrpcStatus & EcmaError {
+  public toJSON (): GErrorDTO {
+    let causeDto: GErrorDTO | undefined
+    if (this.cause) {
+      causeDto = GError.from(this.cause, { stitchStack: false }).toJSON()
+    }
+
     return {
-      code    : this.code,
-      details : this.details,
-      message : this.message,
-      name    : this.name,
-      stack   : this.stack,
+      code: this.code,
+      details: this.details,
+      message: this.message,
+      name: this.name,
+      stack: this.stack,
+      ...(causeDto ? { cause: causeDto } : {}),
+      ...(this.data ? { data: this.data } : {}),
     }
   }
 
   public toGrpcStatus (): GrpcStatus {
     return {
-      code    : this.code,
-      details : this.details,
-      message : this.message,
+      code: typeof this.code === 'number' ? this.code : Code.UNKNOWN,
+      details: this.details,
+      message: this.message,
     }
   }
 
   public toEcmaError (): EcmaError {
     return {
-      message : this.message,
-      name    : this.name,
-      stack   : this.stack,
+      message: this.message,
+      name: this.name,
+      stack: this.stack,
     }
   }
 

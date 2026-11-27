@@ -1,11 +1,10 @@
-#!/usr/bin/env -S node --no-warnings --loader ts-node/esm
-
-import { test }  from 'tstest'
+import test from 'node:test'
+import assert from 'node:assert/strict'
 
 import { GError } from '../src/mod.js'
 
-test('smoke testing', async t => {
+test('smoke testing', async () => {
   const gerror = GError.from(new Error('test'))
-
-  t.ok(gerror, 'should instanciate GError from Error')
+  assert.ok(gerror, 'should instantiate GError from Error')
+  assert.equal(gerror.message, 'test')
 })

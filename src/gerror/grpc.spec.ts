@@ -1,14 +1,13 @@
-#!/usr/bin/env -S node --no-warnings --loader ts-node/esm
-
-import { test } from 'tstest'
+import test from 'node:test'
+import assert from 'node:assert/strict'
 
 import { isGrpcStatus } from './grpc.js'
 
-test('gRPC smoke testing', async t => {
+test('gRPC smoke testing', async () => {
   const payload = {
     code: 2,
     details: undefined,
   }
 
-  t.ok(isGrpcStatus(payload), 'should be grpc payload')
+  assert.ok(isGrpcStatus(payload), 'should be grpc payload')
 })

@@ -5,6 +5,7 @@ import {
   isGrpcStatus,
   isGError,
   GError,
+  type GErrorOptions,
 }                         from './gerror/gerror.js'
 import type {
   EcmaError,
@@ -12,6 +13,15 @@ import type {
 import type {
   GrpcStatus,
 }                         from './gerror/grpc.js'
+import {
+  Code,
+}                         from './gerror/grpc.js'
+import type {
+  GErrorDTO,
+}                         from './gerror/dto.js'
+import {
+  isGErrorDTO,
+}                         from './gerror/dto.js'
 
 import {
   timeoutPromise,
@@ -20,8 +30,8 @@ import {
 
 import {
   wrapAsyncError,
-  WrapAsync,
-  WrapAsyncErrorCallback,
+  type WrapAsync,
+  type WrapAsyncErrorCallback,
 }                           from './wrap-async-error/wrap-async-error.js'
 
 export type {
@@ -29,11 +39,15 @@ export type {
   WrapAsyncErrorCallback,
   EcmaError,
   GrpcStatus,
+  GErrorDTO,
+  GErrorOptions,
 }
 export {
+  Code,
   GError,
   isEcmaError,
   isGError,
+  isGErrorDTO,
   isGrpcStatus,
   timeoutPromise,
   TimeoutPromiseGError,

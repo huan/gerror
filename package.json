@@ -1,30 +1,26 @@
 {
   "name": "gerror",
-  "version": "1.0.16",
+  "version": "2.0.0-alpha.0",
   "description": "Mixer for gRPC Error & ECMAScript Error",
   "type": "module",
   "exports": {
     ".": {
-      "import": "./dist/esm/src/mod.js",
-      "require": "./dist/cjs/src/mod.js"
+      "types": "./dist/esm/src/mod.d.ts",
+      "import": "./dist/esm/src/mod.js"
     }
   },
-  "typings": "./dist/esm/src/mod.d.ts",
+  "types": "./dist/esm/src/mod.d.ts",
   "engines": {
-    "node": ">=16",
-    "npm": ">=7"
+    "node": ">=20",
+    "npm": ">=9"
   },
   "scripts": {
     "clean": "shx rm -fr dist/*",
-    "dist": "npm-run-all clean build dist:commonjs",
-    "build": "tsc && tsc -p tsconfig.cjs.json",
-    "dist:commonjs": "jq -n \"{ type: \\\"commonjs\\\" }\" > dist/cjs/package.json",
-    "lint": "npm run lint:es && npm run lint:ts",
-    "lint:ts": "tsc --isolatedModules --noEmit",
-    "test": "npm-run-all lint test:unit",
-    "test:unit": "cross-env NODE_OPTIONS=\"--no-warnings --loader=ts-node/esm\" tap \"src/**/*.spec.ts\" \"tests/*.spec.ts\"",
-    "test:pack": "bash -x scripts/npm-pack-testing.sh",
-    "lint:es": "eslint --ignore-pattern fixtures/ \"src/**/*.ts\" \"tests/**/*.ts\""
+    "build": "tsc",
+    "dist": "npm run clean && npm run build",
+    "lint": "tsc --noEmit",
+    "test:unit": "node --test \"dist/esm/src/**/*.spec.js\" \"dist/esm/tests/**/*.spec.js\"",
+    "test": "npm run build && npm run test:unit"
   },
   "repository": {
     "type": "git",
@@ -35,7 +31,10 @@
     "grpc",
     "ecma",
     "status",
-    "protocol buffer"
+    "protocol buffer",
+    "dto",
+    "isomorphic",
+    "wintertc"
   ],
   "author": "Huan LI <zixia@zixia.net>",
   "license": "Apache-2.0",
@@ -44,10 +43,9 @@
   },
   "homepage": "https://github.com/huan/gerror#readme",
   "devDependencies": {
-    "@chatie/eslint-config": "^1.0.2",
-    "@chatie/git-scripts": "^0.6.2",
-    "@chatie/semver": "^0.4.7",
-    "@chatie/tsconfig": "^0.20.6"
+    "@types/node": "^22.10.1",
+    "shx": "^0.3.4",
+    "typescript": "^5.7.2"
   },
   "dependencies": {},
   "files": [
@@ -57,10 +55,5 @@
   "publishConfig": {
     "access": "public",
     "tag": "next"
-  },
-  "git": {
-    "scripts": {
-      "pre-push": "npx git-scripts-pre-push"
-    }
   }
 }

@@ -57,7 +57,7 @@ enum Code {
 }
 
 interface GrpcStatus {
-  code     : Code
+  code     : Code | number | string
   message? : string
   /**
    * In gRPC Protobuf, details is a Array
@@ -78,8 +78,7 @@ interface GrpcStatus {
 }
 
 const isGrpcStatus = (payload: any): payload is GrpcStatus => payload instanceof Object
-  && typeof payload.code    === 'number'
-  // && typeof payload.message === 'string' // optional, message might be `undefined` in `@grpc/grpc-js`
+  && (typeof payload.code === 'number' || typeof payload.code === 'string')
   && ['undefined', 'string'].includes(typeof payload.details)
 
 export type { GrpcStatus }

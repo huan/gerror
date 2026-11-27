@@ -59,23 +59,24 @@ jobs:
     name: Publish
     needs: [build, pack]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
         with:
-          node-version: 20
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
           registry-url: https://registry.npmjs.org/
-          cache: npm
-          cache-dependency-path: package.json
+          package-manager-cache: false
 
       - name: Install Dependencies
-        run: npm install
+        run: npm install --ignore-scripts
 
       - name: Generate Version
         run: ./scripts/generate-version.sh
-
-      - name: Set Publish Config
-        run: ./scripts/package-publish-config-tag.sh
 
       - name: Build Dist
         run: npm run dist
@@ -83,20 +84,37 @@ jobs:
       - name: Check Branch
         id: check-branch
         run: |
-          if [[ ${{ github.ref }} =~ ^refs/heads/(main|v[0-9]+\.[0-9]+.*)$ ]]; then
+          if [[ $GITHUB_REF =~ ^refs/heads/(main|v[0-9]+\.[0-9]+.*)$ ]]; then
               echo "match=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Is A Publish Branch
         if: steps.check-branch.outputs.match == 'true'
+        shell: bash
         run: |
-          NAME=$(npx pkg-jq -r .name)
-          VERSION=$(npx pkg-jq -r .version)
-          if npx version-exists "$NAME" "$VERSION"
-          then echo "$NAME@$VERSION exists on NPM, skipped."
-          else npm publish
+          package=$(node --input-type=module -e '
+            import { readFileSync } from "node:fs"
+            const { name, version } = JSON.parse(readFileSync("package.json", "utf8"))
+            console.log(name, version)
+          ')
+          read -r name version <<< "$package"
+
+          versions=$(npm view "$name" versions --json)
+          published=$(node --input-type=module -e '
+            import { readFileSync } from "node:fs"
+            const versions = JSON.parse(readFileSync(0, "utf8"))
+            console.log([versions].flat().includes(process.argv[1]))
+          ' "$version" <<< "$versions")
+          if [[ $published == true ]]; then
+            echo "$name@$version already exists on npm, skipping publish."
+            exit 0
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+          # Set the tag explicitly so npm never promotes a prerelease to latest.
+          tag=latest
+          if [[ ${version%%+*} == *-* ]]; then
+            tag=next
+          fi
+          npm publish --tag "$tag"
       - name: Is Not A Publish Branch
         if: steps.check-branch.outputs.match != 'true'
         run: echo 'Not A Publish Branch'

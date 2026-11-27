@@ -367,5 +367,32 @@ describe('gerror-protobuf', () => {
         }),
       RangeError,
     )
+
+    // Out-of-int32-range and fractional originalCode do not crash toStatus()
+    const bigOrig = statusToData(
+      dataToStatus({
+        version: 1,
+        code: Code.Unknown,
+        message: 'big-orig',
+        details: [],
+        diagnostics: { originalCode: 1e12 },
+      }),
+    )
+    assert.equal(bigOrig.diagnostics?.originalCode, '1000000000000')
+
+    // 32 user details + ErrorContext + DebugInfo round-trip cleanly
+    const thirtyTwoDetails = Array.from({ length: 32 }, (_, i) => ({
+      typeUrl: `type.googleapis.com/acme.v1.D${i}`,
+      value: 'AQ==',
+    }))
+    const fullDetailsStatus = dataToStatus({
+      version: 1,
+      code: Code.InvalidArgument,
+      message: '32 details',
+      details: thirtyTwoDetails,
+      diagnostics: { name: 'GError', stack: 'line1' },
+      cause: { kind: 'value', value: { ok: true } },
+    })
+    assert.equal(statusToData(fullDetailsStatus).details.length, 32)
   })
 })

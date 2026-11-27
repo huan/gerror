@@ -10,7 +10,7 @@
 
 import { Code } from './code.ts'
 import type { ErrorDiagnostics, GErrorOptions } from './data.ts'
-import { DEFAULT_MAX_ERRORS } from './limits.ts'
+import { DEFAULT_MAX_DEPTH, DEFAULT_MAX_ERRORS, DEFAULT_MAX_NODES } from './limits.ts'
 import { type GErrorMetadata, setGErrorMetadata } from './metadata.ts'
 
 const MAX_FALLBACK_MESSAGE_CHARS = 512
@@ -136,11 +136,29 @@ function extractDiagnostics (target: object): ErrorDiagnostics | undefined {
  *   produce bounded `Unknown` `GError` instances.
  * - Cyclic references in `cause` chains are bounded with `activePath` tracking.
  */
+function isNativeError (value: unknown): value is Error {
+  try {
+    return value instanceof Error
+  } catch {
+    return false
+  }
+}
+
+function isAggregateErrorInstance (value: unknown): value is AggregateError {
+  try {
+    return value instanceof AggregateError
+  } catch {
+    return false
+  }
+}
+
 export function normalizeToGError<T extends Error> (
   value: unknown,
   isGError: (candidate: unknown) => candidate is T,
   createGError: GErrorConstructorFn<T>,
   activePath: WeakSet<object> = new WeakSet(),
+  depth = 0,
+  budget: { remainingNodes: number } = { remainingNodes: DEFAULT_MAX_NODES },
 ): T {
   if (isGError(value)) {
     return value
@@ -154,6 +172,14 @@ export function normalizeToGError<T extends Error> (
     return createGError('Unknown error (cyclic cause)', { code: Code.Unknown })
   }
 
+  budget.remainingNodes -= 1
+  if (budget.remainingNodes < 0) {
+    return createGError('Unknown error (size-limit)', { code: Code.Unknown })
+  }
+  if (depth > DEFAULT_MAX_DEPTH) {
+    return createGError('Unknown error (depth-limit)', { code: Code.Unknown })
+  }
+
   activePath.add(value)
   try {
     const msgProp = safeReadProperty(value, 'message')
@@ -162,8 +188,12 @@ export function normalizeToGError<T extends Error> (
       message = msgProp.value
     } else if (msgProp.present && msgProp.value !== undefined) {
       message = primitiveToMessage(msgProp.value)
-    } else if (value instanceof Error) {
-      message = value.name || 'Error'
+    } else if (isNativeError(value)) {
+      const nameProp = safeReadProperty(value, 'name')
+      message =
+        nameProp.present && typeof nameProp.value === 'string' && nameProp.value.length > 0
+          ? nameProp.value
+          : 'Error'
     } else {
       message = 'Unknown error (object)'
     }
@@ -190,17 +220,22 @@ export function normalizeToGError<T extends Error> (
     }
 
     let aggregateErrors: T[] | undefined
-    if (value instanceof AggregateError) {
+    if (isAggregateErrorInstance(value)) {
       const errorsProp = safeReadProperty(value, 'errors')
       if (errorsProp.present && Array.isArray(errorsProp.value) && errorsProp.value.length > 0) {
         aggregateErrors = []
         const limit = Math.min(errorsProp.value.length, DEFAULT_MAX_ERRORS + 1)
         for (let i = 0; i < limit; i += 1) {
+          if (budget.remainingNodes <= 0) {
+            break
+          }
           const member = errorsProp.value[i]
           if (typeof member === 'object' && member !== null && activePath.has(member)) {
             aggregateErrors.push(createGError('Unknown error (cyclic cause)', { code: Code.Unknown }))
           } else {
-            aggregateErrors.push(normalizeToGError(member, isGError, createGError, activePath))
+            aggregateErrors.push(
+              normalizeToGError(member, isGError, createGError, activePath, depth + 1, budget),
+            )
           }
         }
       }

@@ -18,6 +18,21 @@ export interface GErrorMetadata {
 }
 
 const metadataStore = new WeakMap<object, GErrorMetadata>()
+const gerrorInstances = new WeakSet<object>()
+
+/**
+ * Marks `instance` as a genuine `GError` instance for internal callers.
+ */
+export function markGErrorInstance (instance: object): void {
+  gerrorInstances.add(instance)
+}
+
+/**
+ * Returns `true` when `instance` was constructed by `GError`.
+ */
+export function isBrandedGError (instance: object): boolean {
+  return gerrorInstances.has(instance)
+}
 
 /**
  * Associates internal metadata with a `GError` instance.

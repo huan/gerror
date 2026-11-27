@@ -118,11 +118,18 @@ function encodeStatusNode (data: GErrorData, depth: number): Status {
     ctx.name = data.diagnostics.name
     hasContext = true
   }
+const MAX_INT32 = 2_147_483_647
+const MIN_INT32 = -2_147_483_648
+
+function isInt32 (value: number): boolean {
+  return Number.isInteger(value) && value >= MIN_INT32 && value <= MAX_INT32
+}
+
   if (data.diagnostics?.originalCode !== undefined) {
-    if (typeof data.diagnostics.originalCode === 'number') {
+    if (typeof data.diagnostics.originalCode === 'number' && isInt32(data.diagnostics.originalCode)) {
       ctx.originalRpcCode = data.diagnostics.originalCode
     } else {
-      ctx.originalErrorCode = data.diagnostics.originalCode
+      ctx.originalErrorCode = String(data.diagnostics.originalCode)
     }
     hasContext = true
   }
@@ -184,7 +191,7 @@ function decodeStatusNode (
   if (utf8Bytes(status.message) > MAX_MESSAGE_BYTES) {
     throw new RangeError(`google.rpc.Status.message exceeds ${MAX_MESSAGE_BYTES} UTF-8 bytes`)
   }
-  if (status.details.length > MAX_DETAILS) {
+  if (status.details.length > MAX_DETAILS + 2) {
     throw new RangeError(`google.rpc.Status.details exceeds maximum count (${MAX_DETAILS})`)
   }
 
@@ -205,10 +212,10 @@ function decodeStatusNode (
     if (utf8Bytes(any.typeUrl) > MAX_TYPE_URL_BYTES) {
       throw new RangeError(`Any.typeUrl exceeds ${MAX_TYPE_URL_BYTES} UTF-8 bytes`)
     }
-    if (any.value.byteLength > MAX_DETAIL_BYTES) {
-      throw new RangeError(`Any.value exceeds ${MAX_DETAIL_BYTES} bytes`)
-    }
     if (any.typeUrl === ERROR_CONTEXT_TYPE_URL) {
+      if (any.value.byteLength > MAX_BYTES) {
+        throw new RangeError(`ErrorContext exceeds ${MAX_BYTES} bytes`)
+      }
       if (errorContext !== undefined) {
         throw new TypeError('google.rpc.Status contains duplicate gerror.v1.ErrorContext details')
       }
@@ -228,7 +235,13 @@ function decodeStatusNode (
       }
     }
 
+    if (any.value.byteLength > MAX_DETAIL_BYTES) {
+      throw new RangeError(`Any.value exceeds ${MAX_DETAIL_BYTES} bytes`)
+    }
     details.push(anyToDetail(any))
+    if (details.length > MAX_DETAILS) {
+      throw new RangeError(`google.rpc.Status.details exceeds maximum count (${MAX_DETAILS})`)
+    }
   }
 
   let name: string | undefined

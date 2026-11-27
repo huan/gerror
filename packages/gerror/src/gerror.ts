@@ -15,6 +15,7 @@ import type {
   SerializationOptions,
 } from './data.ts'
 import { deserializeGError } from './deserialize.ts'
+import { markGErrorInstance } from './metadata.ts'
 import { normalizeToGError } from './normalize.ts'
 import { serializeGError } from './serialize.ts'
 
@@ -93,6 +94,7 @@ export class GError extends Error {
         ? Code.Unknown
         : assertCode(options.code)
     this.details = copyDetails(options?.details)
+    markGErrorInstance(this)
   }
 
   /**

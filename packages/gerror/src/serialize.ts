@@ -28,7 +28,7 @@ import {
   utf8ByteLength,
   validateStandardBase64,
 } from './limits.ts'
-import { getGErrorMetadata } from './metadata.ts'
+import { getGErrorMetadata, isBrandedGError } from './metadata.ts'
 
 interface SerializeContext {
   readonly policy: ResolvedSerializationPolicy
@@ -112,11 +112,7 @@ function toJsonValue (
     if (Array.isArray(raw)) {
       const out: JsonValue[] = []
       for (let i = 0; i < raw.length; i += 1) {
-        if (!(i in raw)) {
-          out.push(null)
-          continue
-        }
-        const elem = toJsonValue(raw[i], depth + 1, ctx)
+        const elem = toJsonValue(i in raw ? raw[i] : null, depth + 1, ctx)
         if (!elem.ok) {
           return elem
         }
@@ -225,12 +221,11 @@ function readGErrorFields (err: Error): {
   readonly code: Code
   readonly details: readonly ErrorDetail[]
 } {
-  const candidate = err as Error & { code?: unknown; details?: unknown }
-  const code = typeof candidate.code === 'number' ? (candidate.code as Code) : Code.Unknown
-  const details = Array.isArray(candidate.details)
-    ? (candidate.details as readonly ErrorDetail[])
-    : []
-  return { code, details }
+  if (!isBrandedGError(err)) {
+    return { code: Code.Unknown, details: [] }
+  }
+  const candidate = err as Error & { code: Code; details: readonly ErrorDetail[] }
+  return { code: candidate.code, details: candidate.details }
 }
 
 function serializeErrorNode (

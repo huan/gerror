@@ -183,4 +183,30 @@ describe('gerror-connect', () => {
     assert.equal(terminal?.code, Code.Unavailable)
     assert.equal(terminal?.message, 'stream down')
   })
+
+  it('preserves ErrorContext omitted cause and aggregate errors when ConnectError also has a native cause', () => {
+    const agg = GError.from(new AggregateError([new Error('m1')], 'agg'))
+    const withOmittedCause = new GError('agg-root', {
+      code: Code.Internal,
+      cause: () => {},
+    })
+    const combinedData = {
+      ...withOmittedCause.toData(),
+      errors: agg.toData().errors,
+    }
+    const connectErr = toConnectError(GError.fromData(combinedData))
+    connectErr.cause = new Error('local connect cause')
+
+    const restored = fromConnectError(connectErr)
+    const restoredData = restored.toData()
+    assert.deepEqual(restoredData.cause, { kind: 'omitted', reason: 'unsupported-value' })
+    assert.equal(restoredData.errors?.length, 1)
+
+    // When ConnectError has aggregate errors (no wire cause) + native cause, preserve both
+    const aggConnect = toConnectError(agg)
+    aggConnect.cause = new Error('local agg cause')
+    const restoredAgg = fromConnectError(aggConnect)
+    assert.equal(restoredAgg.toData().errors?.length, 1)
+    assert.equal((restoredAgg.cause as GError).message, 'local agg cause')
+  })
 })

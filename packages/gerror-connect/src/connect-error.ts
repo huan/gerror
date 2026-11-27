@@ -114,11 +114,19 @@ export function fromConnectError (error: ConnectError): GError {
   })
 
   const gerror = fromStatus(status)
-  if (!('cause' in gerror) && error.cause !== undefined) {
-    return new GError(gerror.message, {
-      code: gerror.code,
-      details: gerror.details,
-      cause: error.cause,
+  const data = gerror.toData({ diagnostics: 'include' })
+  if (data.cause === undefined && error.cause !== undefined) {
+    if (data.errors === undefined && data.diagnostics === undefined) {
+      return new GError(gerror.message, {
+        code: gerror.code,
+        details: gerror.details,
+        cause: error.cause,
+      })
+    }
+    const causeData = GError.from(error.cause).toData({ diagnostics: 'include' })
+    return GError.fromData({
+      ...data,
+      cause: { kind: 'error', error: causeData },
     })
   }
   return gerror

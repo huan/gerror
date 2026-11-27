@@ -84,5 +84,17 @@ describe('GError.from()', () => {
     assert.equal(fromCyclic.message, 'loop')
     assert.equal(GError.isGError(fromCyclic.cause), true)
     assert.equal((fromCyclic.cause as GError).message, 'Unknown error (cyclic cause)')
+
+    // Revoked Proxy and throwing getPrototypeOf trap do not crash GError.from()
+    const { proxy: revoked, revoke } = Proxy.revocable({}, {})
+    revoke()
+    assert.equal(GError.from(revoked).code, Code.Unknown)
+
+    const throwingProtoProxy = new Proxy({}, {
+      getPrototypeOf () {
+        throw new Error('proto trap')
+      },
+    })
+    assert.equal(GError.from(throwingProtoProxy).code, Code.Unknown)
   })
 })

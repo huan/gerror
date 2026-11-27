@@ -233,5 +233,21 @@ describe('GError serialization (toData / toJSON / stringify)', () => {
     const snap2 = source.toData()
     assert.equal(snap2.details.length, 1)
     assert.deepEqual(snap2.cause, { kind: 'value', value: { nested: [1] } })
+
+    // Native Error cause with non-GError numeric .code stays Code.Unknown
+    const nativeWithNumCode = Object.assign(new Error('inner'), { code: -111 })
+    const wrappedNative = new GError('outer', { cause: nativeWithNumCode })
+    const wrappedData = wrappedNative.toData({ diagnostics: 'include' })
+    assert.equal(wrappedData.cause?.kind, 'error')
+    if (wrappedData.cause?.kind === 'error') {
+      assert.equal(wrappedData.cause.error.code, Code.Unknown)
+      assert.equal(wrappedData.cause.error.diagnostics?.originalCode, -111)
+    }
+
+    // Sparse array holes count against maxNodes budget
+    const hugeSparse: unknown[] = []
+    hugeSparse[200] = 'tail'
+    const sparseBudget = new GError('sparse-budget', { cause: hugeSparse }).toData({ maxNodes: 2 })
+    assert.deepEqual(sparseBudget.cause, { kind: 'omitted', reason: 'size-limit' })
   })
 })
